@@ -1,0 +1,38 @@
+[gd_scene load_steps=2 format=3 uid="uid://tcv_hud"]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hudgd"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hudgd")
+
+[node name="Panel" type="Panel" parent="."]
+offset_right = 800.0
+offset_bottom = 54.0
+
+[node name="LblDay" type="Label" parent="Panel"]
+offset_left = 8.0
+offset_top = 4.0
+offset_right = 160.0
+offset_bottom = 28.0
+text = "Day 1 — Day"
+
+[node name="LblWood" type="Label" parent="Panel"]
+offset_left = 180.0
+offset_top = 4.0
+offset_right = 320.0
+offset_bottom = 28.0
+text = "Wood: 10"
+
+[node name="LblFood" type="Label" parent="Panel"]
+offset_left = 340.0
+offset_top = 4.0
+offset_right = 480.0
+offset_bottom = 28.0
+text = "Food: 8"
+
+[node name="LblStatus" type="Label" parent="Panel"]
+offset_left = 8.0
+offset_top = 30.0
+offset_right = 790.0
+offset_bottom = 52.0
+text = ""

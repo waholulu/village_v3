@@ -1,0 +1,21 @@
+[gd_scene load_steps=2 format=3 uid="uid://tcv_dbg"]
+
+[ext_resource type="Script" path="res://scripts/ui/debug_overlay.gd" id="1_dbggd"]
+
+[node name="DebugOverlay" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_dbggd")
+
+[node name="Panel" type="Panel" parent="."]
+offset_left = 600.0
+offset_top = 60.0
+offset_right = 795.0
+offset_bottom = 680.0
+visible = false
+
+[node name="LblDebug" type="Label" parent="Panel"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 187.0
+offset_bottom = 610.0
+vertical_alignment = 1

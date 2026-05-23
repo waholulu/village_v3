@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://tcv_world"]
+
+[ext_resource type="Script" path="res://scripts/world/tile_map_controller.gd" id="1_tmc"]
+[ext_resource type="Script" path="res://scripts/world/villager_view.gd" id="2_vview"]
+
+[node name="World" type="Node2D"]
+
+[node name="TileMapController" type="TileMapLayer" parent="."]
+script = ExtResource("1_tmc")
+
+[node name="VillagerView" type="Node2D" parent="."]
+script = ExtResource("2_vview")
