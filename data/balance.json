@@ -1,0 +1,23 @@
+{
+  "starting_wood": 10,
+  "starting_food": 8,
+  "villager_count": 3,
+  "days_to_win": 7,
+
+  "wood_per_tree": 3,
+  "food_per_bush": 2,
+
+  "food_consumed_per_villager_per_night": 1,
+  "wood_consumed_by_campfire_per_night": 2,
+
+  "food_low_threshold": 6,
+  "wood_low_threshold": 6,
+  "wood_campfire_urgent_threshold": 4,
+  "time_left_urgent_seconds": 3.0,
+
+  "day_duration_seconds": 10.0,
+  "night_duration_seconds": 5.0,
+
+  "max_campfire_out_nights": 2,
+  "villager_move_interval": 0.5
+}
