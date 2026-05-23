@@ -1,0 +1,21 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="Tiny Campfire Village"
+config/features=PackedStringArray("4.6", "Forward Plus")
+run/main_scene="res://scenes/main/main.tscn"
+
+[autoload]
+
+Events="*res://scripts/core/events.gd"
+
+[display]
+
+window/size/viewport_width=800
+window/size/viewport_height=700
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
