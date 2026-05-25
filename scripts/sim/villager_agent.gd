@@ -8,7 +8,7 @@ var name: String
 var tile_position: Vector2i
 var state: State = State.IDLE
 var current_task_id: int = -1
-var hunger: float = 0.0
+var hunger: int = 0
 var energy: float = 100.0
 
 var _path: Array[Vector2i] = []

@@ -7,15 +7,15 @@ layer = 10
 script = ExtResource("1_dbggd")
 
 [node name="Panel" type="Panel" parent="."]
-offset_left = 600.0
+offset_left = 980.0
 offset_top = 60.0
-offset_right = 795.0
-offset_bottom = 680.0
+offset_right = 1272.0
+offset_bottom = 852.0
 visible = false
 
 [node name="LblDebug" type="Label" parent="Panel"]
 offset_left = 8.0
 offset_top = 8.0
-offset_right = 187.0
-offset_bottom = 610.0
+offset_right = 284.0
+offset_bottom = 784.0
 vertical_alignment = 1

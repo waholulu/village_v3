@@ -10,6 +10,10 @@ Open project in Godot 4.6 and press F5.
 godot --headless --path . -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -gexit
 ```
 
+## Docs
+- Project overview: `docs/project_overview.md`
+- Simulation rules: `docs/simulation_rules.md`
+
 ## Controls
 - F3: toggle debug overlay
 - F5: save game

@@ -6,8 +6,8 @@
 script = ExtResource("1_hudgd")
 
 [node name="Panel" type="Panel" parent="."]
-offset_right = 800.0
-offset_bottom = 54.0
+offset_right = 1440.0
+offset_bottom = 78.0
 
 [node name="LblDay" type="Label" parent="Panel"]
 offset_left = 8.0
@@ -30,9 +30,51 @@ offset_right = 480.0
 offset_bottom = 28.0
 text = "Food: 8"
 
+[node name="LblPopulation" type="Label" parent="Panel"]
+offset_left = 500.0
+offset_top = 4.0
+offset_right = 630.0
+offset_bottom = 28.0
+text = "Pop: 3/3"
+
+[node name="LblHungry" type="Label" parent="Panel"]
+offset_left = 650.0
+offset_top = 4.0
+offset_right = 790.0
+offset_bottom = 28.0
+text = "Hungry: 0"
+
+[node name="LblCampfire" type="Label" parent="Panel"]
+offset_left = 180.0
+offset_top = 30.0
+offset_right = 360.0
+offset_bottom = 54.0
+text = "Campfire out: 0"
+
+[node name="LblTasks" type="Label" parent="Panel"]
+offset_left = 380.0
+offset_top = 30.0
+offset_right = 590.0
+offset_bottom = 54.0
+text = "Tasks: 0 open / 0 claimed"
+
+[node name="LblNature" type="Label" parent="Panel"]
+offset_left = 610.0
+offset_top = 30.0
+offset_right = 900.0
+offset_bottom = 54.0
+text = "Nature: wildlife 0, regrow T0/B0"
+
+[node name="LblAI" type="Label" parent="Panel"]
+offset_left = 920.0
+offset_top = 30.0
+offset_right = 1180.0
+offset_bottom = 54.0
+text = "AI: Stable risk F0/W0"
+
 [node name="LblStatus" type="Label" parent="Panel"]
 offset_left = 8.0
-offset_top = 30.0
+offset_top = 54.0
 offset_right = 790.0
-offset_bottom = 52.0
+offset_bottom = 76.0
 text = ""

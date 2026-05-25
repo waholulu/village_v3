@@ -90,6 +90,17 @@ func test_has_open_task_of_type_false_when_claimed() -> void:
 	board.claim_task(t.id, 1)
 	assert_false(board.has_open_task_of_type("gather_food"))
 
+func test_has_active_task_of_type_true_when_claimed() -> void:
+	var t = board.create_task("build_house", Vector2i(8, 5), 0)
+	board.claim_task(t.id, 1)
+	assert_true(board.has_active_task_of_type("build_house"))
+
+func test_has_active_task_of_type_false_when_completed() -> void:
+	var t = board.create_task("build_house", Vector2i(8, 5), 0)
+	board.claim_task(t.id, 1)
+	board.complete_task(t.id)
+	assert_false(board.has_active_task_of_type("build_house"))
+
 func test_has_task_for_tile_true_when_open() -> void:
 	board.create_task("gather_food", Vector2i(7, 3), 0)
 	assert_true(board.has_task_for_tile(Vector2i(7, 3)))

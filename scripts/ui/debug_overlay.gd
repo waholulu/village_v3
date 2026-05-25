@@ -4,9 +4,16 @@ extends CanvasLayer
 @onready var _lbl: Label = $Panel/LblDebug
 
 var _sim: VillageSimulation
+var _monitor_anomalies: Array[Dictionary] = []
 
 func setup(sim: VillageSimulation) -> void:
 	_sim = sim
+	_monitor_anomalies = sim.monitor_anomalies
+	if not sim.monitor_anomalies_changed.is_connected(_on_monitor_anomalies_changed):
+		sim.monitor_anomalies_changed.connect(_on_monitor_anomalies_changed)
+
+func _on_monitor_anomalies_changed(anomalies: Array[Dictionary]) -> void:
+	_monitor_anomalies = anomalies
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
@@ -18,22 +25,49 @@ func _process(_delta: float) -> void:
 	_lbl.text = _build_debug_text()
 
 func _build_debug_text() -> String:
-	var gt = _sim.game_time
+	var snapshot := _sim.get_snapshot()
+	var tasks: Dictionary = snapshot["tasks"]
+	var nature: Dictionary = snapshot["nature"]
+	var risk: Dictionary = snapshot["risk"]
 	var lines: Array[String] = []
 	lines.append("=== DEBUG (F3) ===")
-	lines.append("Day: %d / %d" % [gt.day, 7])
-	lines.append("Phase: %s" % gt.get_phase_name())
-	lines.append("Tick: %d" % gt.tick)
-	lines.append("Time left: %.1fs" % gt.get_time_left())
+	lines.append("Day: %d / %d" % [snapshot["day"], snapshot["days_to_win"]])
+	lines.append("Phase: %s" % snapshot["phase"])
+	lines.append("Tick: %d" % snapshot["tick"])
+	lines.append("Time left: %.1fs" % snapshot["time_left"])
 	lines.append("")
-	lines.append("Wood: %d" % _sim.store.get_resource("wood"))
-	lines.append("Food: %d" % _sim.store.get_resource("food"))
-	lines.append("Hungry: %d" % _sim.hungry_villagers)
-	lines.append("Campfire out: %d" % _sim.campfire_out_nights)
+	lines.append("Wood: %d" % snapshot["wood"])
+	lines.append("Food: %d" % snapshot["food"])
+	lines.append("Population: %d / %d" % [snapshot["population"], snapshot["population_capacity"]])
+	lines.append("Hungry: %d" % snapshot["hungry"])
+	lines.append("Campfire out: %d" % snapshot["campfire_out"])
 	lines.append("")
-	lines.append("Tasks open: %d" % _sim.board.count_by_status(Task.Status.OPEN))
-	lines.append("Tasks claimed: %d" % _sim.board.count_by_status(Task.Status.CLAIMED))
-	lines.append("Tasks done: %d" % _sim.board.count_by_status(Task.Status.COMPLETED))
+	lines.append("Tasks open: %d" % tasks["open"])
+	lines.append("Tasks claimed: %d" % tasks["claimed"])
+	lines.append("Tasks done: %d" % tasks["completed"])
+	lines.append("Tasks cancelled: %d" % tasks["cancelled"])
+	lines.append("")
+	lines.append("NATURE")
+	lines.append("Wildlife food: %d" % nature.get("wildlife_food", 0))
+	lines.append("Pending trees: %d" % nature.get("pending_trees", 0))
+	lines.append("Pending berries: %d" % nature.get("pending_berry_bushes", 0))
+	lines.append("")
+	lines.append("AI STATUS")
+	lines.append("Status: %s" % snapshot["ai_status"])
+	lines.append("Food shortfall: %d" % risk["food_shortfall"])
+	lines.append("Wood shortfall: %d" % risk["wood_shortfall"])
+	lines.append("")
+	lines.append("MONITOR")
+	if _monitor_anomalies.is_empty():
+		lines.append("Monitor: OK")
+	else:
+		var sorted_anomalies := _monitor_anomalies.duplicate()
+		sorted_anomalies.sort_custom(_sort_anomalies)
+		lines.append("Monitor: %d anomal%s" % [_monitor_anomalies.size(), "y" if _monitor_anomalies.size() == 1 else "ies"])
+		for i in range(mini(4, sorted_anomalies.size())):
+			var anomaly: Dictionary = sorted_anomalies[i]
+			lines.append("%s [%s]" % [anomaly.get("code", "unknown"), anomaly.get("severity", "warning")])
+			lines.append("  %s" % anomaly.get("message", ""))
 	lines.append("")
 	for v in _sim.villagers:
 		var task_info = "none"
@@ -44,4 +78,18 @@ func _build_debug_text() -> String:
 		lines.append("%s: %s" % [v.name, v.get_state_name()])
 		lines.append("  task: %s" % task_info)
 		lines.append("  pos: (%d,%d)" % [v.tile_position.x, v.tile_position.y])
+		lines.append("  hunger: %d" % v.hunger)
 	return "\n".join(lines)
+
+func _sort_anomalies(a: Dictionary, b: Dictionary) -> bool:
+	return _severity_weight(a.get("severity", "")) > _severity_weight(b.get("severity", ""))
+
+func _severity_weight(severity: String) -> int:
+	match severity:
+		"critical":
+			return 3
+		"error":
+			return 2
+		"warning":
+			return 1
+	return 0

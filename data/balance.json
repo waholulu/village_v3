@@ -19,5 +19,31 @@
   "night_duration_seconds": 5.0,
 
   "max_campfire_out_nights": 2,
-  "villager_move_interval": 0.5
+  "villager_move_interval": 0.5,
+
+  "starting_population_capacity": 3,
+  "population_growth_enabled": false,
+  "house_wood_cost": 8,
+  "population_capacity_per_house": 2,
+  "food_required_for_new_villager": 2,
+  "max_hunger": 3,
+
+  "world_seed": 4312,
+  "world_tree_count": 32,
+  "world_berry_bush_count": 18,
+  "world_blocked_count": 18,
+
+  "nature_tree_regrowth_days": 2,
+  "nature_berry_regrowth_days": 1,
+  "nature_max_trees": 36,
+  "nature_max_berry_bushes": 24,
+
+  "wildlife_food_start": 2,
+  "wildlife_food_regrowth_per_day": 1,
+  "wildlife_food_capacity": 8,
+  "food_per_wildlife": 2,
+
+  "monitor_min_food_nights": 1,
+  "monitor_min_wood_nights": 1,
+  "monitor_task_backlog_warning": 40
 }

@@ -1,7 +1,8 @@
 extends Node2D
 
-const TILE_SIZE = 48
-const GRID_SIZE = 12
+const TILE_SIZE = 36
+const GRID_WIDTH = WorldGenerator.WIDTH
+const GRID_HEIGHT = WorldGenerator.HEIGHT
 
 var _sim: VillageSimulation
 var _tilemap: TileMapController
@@ -13,14 +14,14 @@ func _ready() -> void:
 	balance.load_from_file("res://data/balance.json")
 
 	var wg = WorldGenerator.new()
-	wg.generate_fixed()
+	wg.generate_from_balance(balance)
 
 	var pf = PathfindingService.new()
 	pf.setup(wg)
 
 	var world_scene = preload("res://scenes/world/world.tscn").instantiate()
 	# Offset world to leave room for HUD at top
-	world_scene.position = Vector2(8, 60)
+	world_scene.position = Vector2(0, 60)
 	add_child(world_scene)
 
 	_tilemap = world_scene.get_node("TileMapController")
@@ -45,7 +46,14 @@ func _ready() -> void:
 
 	var hud = preload("res://scenes/ui/hud.tscn").instantiate()
 	add_child(hud)
+	hud.setup(_sim)
 	hud.update_resources(balance.starting_wood, balance.starting_food)
+	hud.update_population(_sim.villagers.size(), _sim.population_capacity)
+	hud.update_hunger(_sim.hungry_villagers)
+	hud.update_campfire(_sim.campfire_out_nights)
+	_sim.population_changed.connect(hud.update_population)
+	_sim.hunger_changed.connect(hud.update_hunger)
+	_sim.game_time.night_started.connect(func(_day: int) -> void: hud.update_campfire(_sim.campfire_out_nights))
 
 	var dbg = preload("res://scenes/ui/debug_overlay.tscn").instantiate()
 	add_child(dbg)

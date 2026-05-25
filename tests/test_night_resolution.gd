@@ -20,6 +20,26 @@ func test_food_shortage_tracks_hungry_villagers() -> void:
 	assert_eq(sim.store.get_resource("food"), 0)
 	assert_eq(sim.hungry_villagers, 2)
 
+func test_fed_villager_hunger_decreases() -> void:
+	sim.setup_for_test(10, 1, 1)
+	sim.villagers[0].hunger = 2
+	sim.resolve_night()
+	assert_eq(sim.villagers[0].hunger, 1)
+	assert_eq(sim.hungry_villagers, 1)
+
+func test_unfed_villager_hunger_increases() -> void:
+	sim.setup_for_test(10, 0, 1)
+	sim.resolve_night()
+	assert_eq(sim.villagers[0].hunger, 1)
+	assert_eq(sim.hungry_villagers, 1)
+
+func test_starvation_loses_game() -> void:
+	watch_signals(sim)
+	sim.setup_for_test(10, 0, 1)
+	sim.villagers[0].hunger = 2
+	sim.resolve_night()
+	assert_signal_emitted(sim, "game_lost")
+
 func test_food_does_not_go_negative() -> void:
 	sim.setup_for_test(10, 0, 3)
 	sim.resolve_night()
@@ -56,6 +76,12 @@ func test_game_won_signal_forwarded() -> void:
 	for i in range(14):
 		sim.game_time._advance_phase()
 	assert_signal_emitted(sim, "game_won")
+
+func test_open_return_home_tasks_are_cancelled_at_day_start() -> void:
+	sim._generate_return_home_tasks()
+	sim._on_day_started(2)
+	assert_eq(sim.board.count_by_status(Task.Status.OPEN), 0)
+	assert_eq(sim.board.count_by_status(Task.Status.CANCELLED), 3)
 
 func test_setup_for_test_is_idempotent() -> void:
 	sim.setup_for_test(5, 5, 3)

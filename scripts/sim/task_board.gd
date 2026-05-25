@@ -43,6 +43,12 @@ func has_open_task_of_type(type: String) -> bool:
 			return true
 	return false
 
+func has_active_task_of_type(type: String) -> bool:
+	for t in _tasks:
+		if t.type == type and (t.status == Task.Status.OPEN or t.status == Task.Status.CLAIMED):
+			return true
+	return false
+
 func has_task_for_tile(tile: Vector2i) -> bool:
 	for t in _tasks:
 		if t.target_tile == tile and (t.status == Task.Status.OPEN or t.status == Task.Status.CLAIMED):

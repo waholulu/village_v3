@@ -55,3 +55,12 @@ func test_set_task_changes_state_to_moving() -> void:
 	villager.set_task(task)
 	assert_eq(villager.state, VillagerAgent.State.MOVING_TO_TARGET)
 	assert_eq(villager.current_task_id, task.id)
+
+func test_gather_wildlife_scores_as_food_source() -> void:
+	var ctx = _make_context(10, 0)
+	ctx.board.create_task("gather_wildlife", WorldGenerator.HUT_POS, 0)
+	ctx.board.create_task("chop_tree", Vector2i(5, 5), 0)
+	var villager = VillagerAgent.new(1, "Gale", Vector2i(6, 6))
+	var chosen = villager.pick_best_task(ctx.board, ctx.store, ctx.gt, ctx.scorer)
+	assert_not_null(chosen)
+	assert_eq(chosen.type, "gather_wildlife")

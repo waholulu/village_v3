@@ -10,6 +10,8 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, gt: G
 	match task.type:
 		"gather_food":
 			score += maxf(0.0, 10.0 - float(food)) * 3.0
+		"gather_wildlife":
+			score += maxf(0.0, 10.0 - float(food)) * 2.5
 		"chop_tree":
 			score += maxf(0.0, 10.0 - float(wood)) * 2.0
 		"refuel_campfire":
@@ -19,6 +21,8 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, gt: G
 		"return_home":
 			if gt.phase == GameTime.Phase.NIGHT:
 				score += 100.0
+		"build_house":
+			score += 25.0
 
 	score -= dist * 0.5
 	return score
