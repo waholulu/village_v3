@@ -35,12 +35,12 @@ func refresh_tile(pos: Vector2i, tile_type: int) -> void:
 	set_cell(pos, 0, Vector2i(tile_type, 0))
 
 func _load_tile_texture() -> Texture2D:
-	if FileAccess.file_exists(TILE_SHEET_PATH):
-		var image := Image.new()
-		if image.load(TILE_SHEET_PATH) == OK \
-			and image.get_width() >= TILE_SIZE * TILE_COLORS.size() \
-			and image.get_height() >= TILE_SIZE:
-			return ImageTexture.create_from_image(image)
+	if ResourceLoader.exists(TILE_SHEET_PATH):
+		var tex := load(TILE_SHEET_PATH) as Texture2D
+		if tex != null \
+			and tex.get_width() >= TILE_SIZE * TILE_COLORS.size() \
+			and tex.get_height() >= TILE_SIZE:
+			return tex
 	return ImageTexture.create_from_image(_make_fallback_tilesheet())
 
 func _make_fallback_tilesheet() -> Image:

@@ -5,6 +5,12 @@ var _finished := false
 func _init() -> void:
 	print("=== Headless Simulation Start ===")
 
+	# Run at 100× real time so 7 game-days complete in ~0.2 real seconds.
+	# time_scale scales _process delta, so GameTime and villager move timers
+	# both advance proportionally — behaviour is identical to real-time play.
+	Engine.time_scale = 100.0
+	Engine.max_fps = 0
+
 	var balance = BalanceData.new()
 	balance.load_from_file("res://data/balance.json")
 	balance.day_duration_seconds = 2.0

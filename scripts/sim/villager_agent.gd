@@ -47,8 +47,10 @@ func tick_movement(delta: float, path: Array[Vector2i], move_interval: float) ->
 	if path.is_empty():
 		return false
 	_move_timer += delta
-	if _move_timer >= move_interval:
-		_move_timer = 0.0
+	# Consume accumulated time in steps so large deltas (e.g. time_scale > 1)
+	# don't stall villagers at one tile per frame.
+	while _move_timer >= move_interval:
+		_move_timer -= move_interval
 		if path.size() > 1:
 			tile_position = path[1]
 			path.remove_at(0)
