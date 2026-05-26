@@ -17,8 +17,6 @@ var wood_low_threshold: int = 6
 # moment stock crosses the low_threshold.
 var food_surplus_threshold: int = 12
 var wood_surplus_threshold: int = 12
-var wood_campfire_urgent_threshold: int = 4
-var time_left_urgent_seconds: float = 3.0
 var day_duration_seconds: float = 10.0
 var night_duration_seconds: float = 5.0
 var max_campfire_out_nights: int = 2
@@ -80,4 +78,8 @@ func load_from_file(path: String) -> bool:
 	for key in data:
 		if key in self:
 			set(key, data[key])
+		else:
+			# Catch JSON typos that today silently default. e.g. a balance file
+			# with `wolf_threat_radious` (typo) would have shipped unnoticed.
+			push_warning("BalanceData: unknown key '%s' in %s" % [key, path])
 	return true

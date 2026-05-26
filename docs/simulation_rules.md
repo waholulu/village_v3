@@ -1,96 +1,238 @@
 # Simulation Rules
 
+Authoritative current behavior. If code and this doc disagree, **the code
+wins** — but the doc is wrong and must be updated. Codex / Claude / future
+contributors will build on these rules; do not let them drift.
+
+For higher-level project framing and the multi-phase outline, see
+`ROADMAP.md`. For the architectural separations and signal flow, see
+`CLAUDE.md`.
+
 ## Resources
-- Wood: starting=10, gained by chopping tree (+3 each)
-- Food: starting=8, gained by harvesting berry bush (+2 each)
-- Wildlife food: starts at 2, grows by 1 at each day start, and is capped at 8.
-- Completing a gather_wildlife task consumes 1 wildlife food and adds +2 food.
-- Resources never go below 0
+
+- `wood` and `food`. Both start from balance keys, both go through
+  `ResourceStore`, both never drop below zero on consumption.
+- `wildlife_food` no longer exists — deer are full `WildlifeAgent` entities
+  with positions, not an integer counter.
 
 ## World
-- Fixed map size: 40x27 tiles.
-- Map generation is deterministic from `world_seed`.
-- The hut remains at `(4, 5)` and the campfire remains at `(6, 6)`.
-- Trees, berry bushes, and blocked tiles are generated in small seeded clusters.
-- Hut/campfire surroundings are kept clear enough for spawning and movement.
-- Every generated tree and berry bush must have a walkable adjacent approach tile reachable from the hut.
-- Starting hut and campfire are walkable.
-- Trees, berry bushes, blocked tiles, and build sites are not walkable.
-- Constructed houses are walkable.
-- Pathfinding returns no path when the start or destination is outside the map.
-- Walkability updates outside the map are ignored.
+
+- Fixed 40×27 grid. Generation is deterministic from `world_seed`.
+- `HUT_POS = (4, 5)`, `CAMPFIRE_POS = (6, 6)` — hardcoded in
+  `WorldGenerator`, not configurable via balance.
+- Tile types: `GRASS`, `TREE`, `BERRY_BUSH`, `HUT`, `CAMPFIRE`, `BLOCKED`,
+  `BUILD_SITE`, `HOUSE`, `FENCE`, `WATCHTOWER`, `STORAGE`.
+- Walkable: GRASS, HUT, CAMPFIRE, HOUSE, FENCE, WATCHTOWER, STORAGE.
+- Non-walkable: TREE, BERRY_BUSH, BLOCKED, BUILD_SITE.
+- `WorldGenerator._tile_index` is the source of truth for
+  `get_tiles_of_type` / `count_tiles_of_type`. **Every grid mutation goes
+  through `set_tile`** so the index stays consistent.
+- Generation order: place resources → place HUT / CAMPFIRE / build_sites
+  → `_repair_resource_access()` → `_ensure_reachable_resources()`. Build
+  sites are placed BEFORE reachability so the check sees the real
+  topology.
 
 ## Time
-- Day: 10 seconds. Villagers gather.
-- Night: 5 seconds. Resources consumed.
 
-## Night resolution (runs once when night starts)
-1. Villagers attempt to eat in stable ID order.
-   - Fed villagers consume 1 food and reduce hunger by 1, minimum 0.
-   - Unfed villagers gain 1 hunger.
-   - hungry_villagers = villagers with hunger > 0.
-   - Any villager at hunger >= 3 causes a loss.
-2. wood_consumed = min(wood, 2)
-   if wood_consumed < 2: campfire_out_nights += 1
-   else: campfire_out_nights = 0
+- `GameTime` advances DAY ⇄ NIGHT on a timer. Durations from balance:
+  `day_duration_seconds`, `night_duration_seconds`.
+- Initial DAY phase emits no `day_started` signal (subsequent days do).
+- Win: `day > days_to_win` → emits `game_won`.
 
-## Population and houses
-- Starting population capacity: 3.
-- Default MVP balance has population growth disabled, so the 7-day run stays at 3 villagers.
-- If population growth is enabled, population is at capacity, wood >= 8, no active build_house task exists, and a build site exists, create a build_house task.
-- Completing build_house consumes 8 wood, converts the build site to a house, and increases population capacity by 2.
-- If wood is no longer available when the builder arrives, the build_house task is cancelled and the map does not change.
-- At day start, if population growth is enabled, population < capacity, and food >= 2, consume 2 food and add 1 villager at the hut.
+## Tasks
 
-## Nature updates
-- Chopping a tree records that tile for tree regrowth.
-- Gathering a berry bush records that tile for berry regrowth.
-- Tree regrowth is allowed after 2 day starts; berry regrowth is allowed after 1 day start.
-- Regrowth prefers the original tile, then deterministic nearby grass candidates.
-- Regrowth never overwrites hut, campfire, build sites, houses, blocked tiles, or occupied resource tiles.
-- Regrowth is capped by `nature_max_trees` and `nature_max_berry_bushes`.
-- Regrown trees and berry bushes become non-walkable and update pathfinding.
+Task types currently in the simulation (in priority order under default
+balance):
 
-## Win/loss
-- Win: survive past day 7 (day becomes 8)
-- Lose: campfire_out_nights >= 2
-- Lose: any villager reaches hunger >= 3
+- `build_house`, `build_watchtower`, `build_fence`, `build_storage`:
+  created by `ConstructionPlanner` at day_start. Scored as flat bonuses
+  (25 / 20 / 15 / 12) minus distance × 0.5.
+- `gather_food`: created per BERRY_BUSH when `food < food_low_threshold`.
+- `chop_tree`: created per TREE when `wood < wood_low_threshold`.
+- `hunt_deer`: created when a deer is within `deer_hunt_radius` of HUT,
+  regardless of food level. Cancelled at every day_start (deer move daily).
 
-## Task generation rules (checked each tick during Day phase)
-- food < 6 and no open gather_food task → create gather_food
-- food < 6, wildlife_food > 0, and no active gather_wildlife task → create gather_wildlife at the hut
-- wood < 6 and no open chop_tree task → create chop_tree
-- day phase with < 3s remaining and wood < 4 → create refuel_campfire
-- population growth enabled and population >= capacity and wood >= 8 and no active build_house task → create build_house
-- night starts → create return_home for each villager
-- day starts → cancel any open return_home tasks that were not completed overnight
+**No more `return_home` or `refuel_campfire` tasks.** Those were
+placeholders removed in the Phase C cleanup. Codex / Claude must NOT
+re-introduce them — they're listed in ROADMAP.md's anti-features by
+implication (no second-tier scheduling).
 
-## Villager task scoring (UtilityScorer)
-- gather_food: (10 - food) * 3 - distance * 0.5
-- gather_wildlife: (10 - food) * 2.5 - distance * 0.5
-- chop_tree:   (10 - wood) * 2 - distance * 0.5
-- refuel_campfire: (4 - wood) * 5 + (time_left < 3 ? 50 : 0)
-- return_home: 100 if Night else 0
-- build_house: 25 - distance * 0.5
+### Asymmetric thresholds
 
-## Development monitor
-- The monitor reports anomalies only; it does not win, lose, or mutate the simulation.
-- Villagers must stay inside the map and stand only on walkable tiles.
-- Villager paths must contain only in-bounds, walkable tiles.
-- Task target and approach tiles must stay inside the map.
-- Task approach tiles must be walkable.
-- Claimed tasks must point to an existing villager.
-- Claimed tasks must be referenced by the villager that owns the claim.
-- Villagers with a current task must reference an existing claimed task owned by that villager.
-- Idle villagers cannot retain a current task id.
-- Resource stock cannot be negative.
-- Population cannot exceed population capacity.
-- A moving villager with no path is reported.
-- If food cannot cover the configured next-night buffer and no reachable food source exists, report `food_survival_risk`.
-- If wood cannot cover the configured next-night buffer and no reachable tree exists, report `wood_survival_risk`.
-- If active tasks exceed `monitor_task_backlog_warning`, report `task_backlog_high`.
-- Loading a save resets any villager with an out-of-bounds or unwalkable position to a valid spawn tile near the hut.
+- Create gather_food when `food < food_low_threshold` (default 6).
+- Cancel open gather_food when `food >= food_surplus_threshold` (default 12).
+- Same pattern for chop_tree with `wood_low/surplus_threshold`.
+- The gap between low and surplus lets idle villagers consume existing
+  OPEN tasks instead of going idle the moment stock crosses the floor.
+
+### Task lifecycle
+
+- `Task.Status`: OPEN → CLAIMED → COMPLETED | CANCELLED.
+- `board.clear_stale()` runs at every day_start to purge
+  COMPLETED/CANCELLED entries so the list stays bounded.
+- Bulk cancellations (`_cancel_open_tasks_of_type`) emit one
+  `task_cancelled` log event per affected task, with the reason field
+  (`stale_at_day_start`, `food_above_surplus_threshold`, etc.).
+
+## Villager AI
+
+- Two-state machine: `IDLE` / `MOVING_TO_TARGET`. No third state allowed.
+- `pick_best_task` scans all OPEN tasks via `UtilityScorer.score_task`,
+  takes the highest. Pure function, no oscillation prevention needed
+  because no priority loops exist.
+- Distance penalty in scoring uses `task.approach_tile`, not
+  `target_tile`. For non-walkable targets the approach tile is where the
+  villager actually goes.
+- `pick_best_task` returns null when there are no open tasks — villager
+  stays IDLE that tick.
+- `clear_task()` resets `state`, `current_task_id`, `_path`, and
+  `_move_timer` — no transient state leaks across tasks.
+
+## Wildlife
+
+`NatureSystem` owns `animals: Array[WildlifeAgent]` plus regrowth.
+
+### Deer
+
+- Spawn near BERRY_BUSHes after day 1 (`deer_spawn_per_day` per eligible
+  day, capped by `deer_max_count`).
+- Move 1 random walkable neighbor per day_start.
+- Hunted via `hunt_deer` task; gives `food_per_deer` food.
+- Despawn: deer have no max age (only wolves do).
+
+### Wolves
+
+- Spawn in TREE clusters at distance ≥ 10 from HUT, starting from
+  `wolf_spawn_day`, every `wolf_spawn_interval_days` days, capped at
+  `wolf_max_count`.
+- Move toward HUT one tile per day_start, via `PathfindingService` if
+  available (falls back to cardinal-step if pathfinding is null —
+  e.g. tests). They route around BLOCKED tiles.
+- Despawn after `wolf_max_age_days` days.
+
+### Wolf threat
+
+- `nature.check_wolf_threat(campfire_out_nights)` returns true when
+  `campfire_out_nights > 0` AND any wolf is within `wolf_threat_radius`.
+- Checked once at night_started, after `resolve_night`.
+- Triggers `_apply_wolf_disruption`: picks one villager (RNG diversified
+  by day + threat_count + village size), applies
+  `wolf_hunger_disruption` hunger after mitigation, increments
+  `_wolf_threat_count`.
+- **Starvation re-checked after wolf damage** so a wolf-pushed overflow
+  ends the game immediately, not next night.
+
+### Regrowth
+
+- Records harvested TREE / BERRY_BUSH tiles. Trees regrow after
+  `nature_tree_regrowth_days`, bushes after
+  `nature_berry_regrowth_days`.
+- Regrowth respects `nature_max_trees` / `nature_max_berry_bushes` caps
+  and skips tiles currently occupied by a villager or as a task's
+  approach tile.
+- Regrown tiles update pathfinding to non-walkable.
+
+## Buildings
+
+Four buildings, data-driven via `BuildingDefs.BUILDINGS`:
+
+| Building | Cost | Priority | Trigger (in `ConstructionPlanner._condition_met`) | Effect |
+|---|---|---|---|---|
+| House | 8 wood | 1 | `population_growth_enabled` AND villagers >= capacity | `population_capacity += population_capacity_per_house` |
+| Watchtower | 6 wood | 2 | `day >= 4` AND not yet built | Halves wolf damage before fence mitigation |
+| Fence | 2 wood | 3 | wolves present AND `_wolf_threat_count > 0` AND `_fence_count < 8` | Each fence multiplies remaining wolf damage by `1 - fence_wolf_damage_reduction` |
+| Storage | 4 wood | 4 | food near or above current cap | Increases food spoilage cap by `food_capacity_per_storage` |
+
+- One building planned per day_start (`ConstructionPlanner.plan` returns
+  one decision at most). Wood budget is checked first; building is skipped
+  if unaffordable.
+- `_apply_food_spoilage` runs at night: food above
+  `food_base_capacity + storage_count * food_capacity_per_storage` spoils
+  by `(excess) / food_spoilage_divisor` per night (rounded up).
+
+## Night resolution
+
+In `_on_night_started`:
+
+1. `_resolve_hunger`: each villager eats `food_consumed_per_villager_per_night`
+   if available; if fed, hunger -= 1 (clamped 0); else hunger += 1. If any
+   villager's hunger >= `max_hunger`, emit `game_lost("A villager starved")`.
+2. Campfire wood consumption: `wood_consumed_by_campfire_per_night`.
+   If shortfall, `campfire_out_nights += 1`. If `campfire_out_nights >=
+   max_campfire_out_nights`, emit `game_lost("Campfire out for N
+   consecutive nights")`.
+3. `_apply_food_spoilage` against storage capacity.
+4. `nature.check_wolf_threat` → if true, `_apply_wolf_disruption`
+   (which re-checks starvation after damage).
+
+## Difficulty presets
+
+- `data/balance.json` is the default preset.
+- `data/balance_hard.json` is the hard preset.
+- Selected via headless runner CLI: `-- preset=hard`. UI play always
+  uses default.
+- Hard preset adjusts 9 keys to force wolf threat to actually fire
+  during a 7-day run (default balance never lets the campfire fail).
+
+## Save / load
+
+- `SaveManager.save()` writes the full 40×27 grid as `tiles`, plus
+  resources, day/phase, villager positions + hunger + names, and
+  `_wolf_threat_count`. **No tasks, no buildings list, no derived
+  counters** — all reconstructed from the grid.
+- `load_into()`:
+  - Sets resources via `store.setup()` (which emits `stock_changed` →
+    HUD refreshes).
+  - Restores grid via `world_gen.set_tile()` for each cell.
+  - Recomputes `_fence_count` / `_watchtower_count` / `_storage_count`
+    from tile counts.
+  - Drops the task board (`sim.board = TaskBoard.new()`); tasks
+    regenerate next tick.
+  - Resets every villager to IDLE with empty path; keeps position +
+    hunger + name + id.
+  - Rebuilds pathfinding from scratch (`pf.setup(wg)`).
+  - Emits `tile_changed` for every cell so renderers redraw.
+- No schema version field. Format is still mutating; pre-Phase-B saves
+  will load with the legacy field set ignored (graceful but resources may
+  drift — re-save immediately after load to migrate).
+
+## Monitor
+
+`SimulationMonitor.check(sim)` returns `Array[Dictionary]` of anomalies
+with `code`, `severity`, `message`. Runs after state-change events
+(night resolution, day start, build, regrowth, save load) immediately
+and via per-frame throttling (every 5 frames) during `_tick_villagers`.
+Anomalies it currently reports:
+
+- `villager_out_of_bounds`, `villager_on_unwalkable_tile`,
+  `path_out_of_bounds`, `path_on_unwalkable_tile`
+- `villager_idle_with_task`, `villager_task_missing_task`,
+  `villager_task_not_claimed`, `villager_task_claim_mismatch`,
+  `moving_villager_without_path`
+- `task_target_out_of_bounds`, `task_approach_out_of_bounds`,
+  `task_approach_unwalkable`
+- `claimed_task_missing_villager`, `claimed_task_unassigned`
+- `negative_resource`, `population_over_capacity`
+- `food_survival_risk`, `wood_survival_risk` (only when no reachable
+  alternative exists)
+- `task_backlog_high` (active task count > `monitor_task_backlog_warning`)
+
+## Action log (JSONL)
+
+`ActionLogger` writes one JSON object per line to
+`user://run_<timestamp>.jsonl` in headless runs. Used for post-run audits.
+Events include: `task_claimed`, `task_completed`, `task_cancelled` (with
+reason), `built`, `construction_planned`, `wolf_threat`,
+`wolf_threat_mitigated`, `night_hunger`, `campfire_ok`/`campfire_out`,
+`food_spoiled`, `regrowth`, `deer_spawned`, `wolf_spawned`,
+`wolf_despawned`, `run_summary`. The logger is never above 50 lines —
+do not grow it.
 
 ## Debug snapshot
-- HUD and F3 debug overlay read from the same simulation snapshot.
-- Snapshot includes resources, population, hunger, campfire out nights, task counts, nature counts, shortfall risk, and AI status.
+
+- F3 in live play opens DebugOverlay (read-only view of monitor +
+  per-villager state).
+- HUD shows day/phase, wood, food, population, hungry count,
+  campfire-out streak, nature counts, task counts, monitor status.
+- Both HUD and DebugOverlay are pure signal-driven — no per-frame
+  polling of simulation state.

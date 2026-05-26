@@ -38,6 +38,10 @@ func set_task(task: Task) -> void:
 func clear_task() -> void:
 	current_task_id = -1
 	state = State.IDLE
+	# Wipe transient movement so an idle villager doesn't appear "mid-walk"
+	# from a cancelled task's leftover path on the next debug snapshot.
+	_path.clear()
+	_move_timer = 0.0
 
 func get_state_name() -> String:
 	return State.keys()[state]

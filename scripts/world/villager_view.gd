@@ -26,6 +26,11 @@ func _process(_delta: float) -> void:
 		_sprites[i].position = Vector2(v.tile_position) * TILE_SIZE + Vector2(6, 6)
 
 func _sync_sprites() -> void:
+	# Shrink first so a smaller villager list (after F9 load) doesn't leave
+	# stale sprites rendering at their last positions.
+	while _sprites.size() > _villagers.size():
+		_sprites[-1].queue_free()
+		_sprites.remove_at(_sprites.size() - 1)
 	while _sprites.size() < _villagers.size():
 		var sprite = Sprite2D.new()
 		sprite.texture = _get_villager_texture(_sprites.size())

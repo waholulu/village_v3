@@ -35,13 +35,15 @@ func generate_fixed(seed: int = 4312, tree_count: int = 32, berry_count: int = 1
 	_place_clustered_tiles(TileType.BLOCKED, blocked_count, rng, 6)
 	_place_clustered_tiles(TileType.TREE, tree_count, rng, 8)
 	_place_clustered_tiles(TileType.BERRY_BUSH, berry_count, rng, 5)
-	_repair_resource_access()
-	_ensure_reachable_resources()
-
+	# Place fixed-position tiles BEFORE reachability passes — build_sites are
+	# non-walkable BUILD_SITE tiles, and if reachability is checked before
+	# they're laid down, a site landing on a corridor can strand a resource.
 	set_tile(CAMPFIRE_POS.x, CAMPFIRE_POS.y, TileType.CAMPFIRE)
 	set_tile(HUT_POS.x, HUT_POS.y, TileType.HUT)
 	for pos in build_sites:
 		set_tile(pos.x, pos.y, TileType.BUILD_SITE)
+	_repair_resource_access()
+	_ensure_reachable_resources()
 
 func generate_from_balance(balance: BalanceData) -> void:
 	last_seed = balance.world_seed
@@ -105,12 +107,14 @@ func generate_from_balance(balance: BalanceData) -> void:
 	if bushes_to_place > 0:
 		_place_clustered_tiles(TileType.BERRY_BUSH, bushes_to_place, rng, 4)
 
-	_repair_resource_access()
-	_ensure_reachable_resources()
+	# Place fixed-position tiles BEFORE reachability passes — see generate_fixed
+	# for the rationale (build_sites can strand resources if added after repair).
 	set_tile(CAMPFIRE_POS.x, CAMPFIRE_POS.y, TileType.CAMPFIRE)
 	set_tile(HUT_POS.x, HUT_POS.y, TileType.HUT)
 	for pos in build_sites:
 		set_tile(pos.x, pos.y, TileType.BUILD_SITE)
+	_repair_resource_access()
+	_ensure_reachable_resources()
 
 func _generate_noise_map(seed: int, frequency: float) -> Array:
 	var fnl := FastNoiseLite.new()
@@ -158,7 +162,10 @@ func _cellular_smooth_blocked(rng: RandomNumberGenerator, target: int, passes: i
 						and pos != HUT_POS and pos != CAMPFIRE_POS:
 					changes.append([x, y, TileType.GRASS])
 		for c in changes:
-			grid[c[1]][c[0]] = c[2]
+			# Use set_tile (not direct grid write) so _tile_index stays in sync.
+			# Direct writes here previously desynced the index, breaking every
+			# get_tiles_of_type / count_tiles_of_type downstream of generation.
+			set_tile(c[0], c[1], c[2])
 
 	# Trim excess blocked tiles back to target (remove most-isolated first)
 	var current_blocked := get_tiles_of_type(TileType.BLOCKED)

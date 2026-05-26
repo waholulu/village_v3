@@ -14,8 +14,6 @@
   "wood_low_threshold": 6,
   "food_surplus_threshold": 12,
   "wood_surplus_threshold": 12,
-  "wood_campfire_urgent_threshold": 4,
-  "time_left_urgent_seconds": 3.0,
 
   "day_duration_seconds": 10.0,
   "night_duration_seconds": 5.0,

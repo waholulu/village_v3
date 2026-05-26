@@ -1,157 +1,158 @@
 # Project Overview
 
-This document is the current single-page reference for Tiny Campfire Village.
-For exact simulation rule details, also read `docs/simulation_rules.md`.
+One-page reference for Tiny Campfire Village. For the strategic direction
+(phases, anti-features, guardrails) see `ROADMAP.md`. For exact runtime
+behavior see `docs/simulation_rules.md`. For architecture / signal flow
+see `CLAUDE.md`.
 
 ## Goal
-- Tiny Campfire Village is a small Godot 4.6 MVP for testing an agent-friendly game development workflow.
-- The player starts with 3 villagers.
-- Villagers gather wood and food during the day.
-- At night, villagers consume food and the campfire consumes wood.
+
+A small, observable, deterministic Godot 4 village simulation:
+
+- 3 villagers, autonomous, no direct player control.
 - Survive past day 7 to win.
-- Lose if the campfire is out for 2 consecutive nights or any villager reaches hunger 3.
+- Lose when any villager reaches `max_hunger` (default 3) **or** when
+  campfire stays out for `max_campfire_out_nights` consecutive nights
+  (default 2).
+- A `hard` balance preset exercises wolf threats; the default preset
+  produces a comfortable run.
 
-## Tech Stack
+## Tech stack
+
 - Engine: Godot 4.6
-- Language: GDScript
-- Rendering: `TileMapLayer` plus simple `Sprite2D` villager views
-- Pathfinding: `AStarGrid2D`
-- Tests: GUT
-- Save data: JSON at `user://save.json`
-- Balance data: JSON at `data/balance.json`
+- Language: GDScript (warnings-as-errors typing convention)
+- Rendering: `TileMapLayer` + per-entity `Sprite2D`
+- Pathfinding: `AStarGrid2D` wrapped by `PathfindingService`
+- Tests: GUT 9.6
+- Save: JSON at `user://save.json`
+- Balance: JSON at `data/balance.json` (default) and
+  `data/balance_hard.json` (hard preset)
 
-## Run Commands
-Open the project in Godot 4.6 and press F5.
+## Run commands
 
-Run all tests:
+The exact commands live in `CLAUDE.md`. Common ones:
+
 ```powershell
-E:\godot\Godot_v4.6.3-stable_win64_console.exe --headless --path . -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -gexit
+# Tests
+& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -ginclude_subdirs -gexit
+
+# Default headless smoke (~7s real time)
+& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd
+
+# Hard preset headless
+& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd -- preset=hard
+
+# Live play
+& "E:\godot\Godot_v4.6.3-stable_win64.exe" --path "E:\godot\tiny-campfire-village"
 ```
 
-In PowerShell, if Godot reports `Unknown arguments: ["//tests"]`, use:
-```powershell
-& 'E:\godot\Godot_v4.6.3-stable_win64_console.exe' --% --headless --path . -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -gexit
-```
+After adding any new `.gd` with a `class_name`, run `--import` first.
 
-Headless scene startup smoke test:
-```powershell
-& 'E:\godot\Godot_v4.6.3-stable_win64_console.exe' --% --headless --path . --quit-after 2
-```
+## Test status
 
-## Current Test Status
-- Latest verified GUT run: 119 tests passing.
-- Test suites cover time, resources, world generation, pathfinding, tasks, villagers, night resolution, population growth, save/load recovery, and simulation monitoring.
-- Any new simulation rule should get a matching GUT test.
+Latest run: **188 GUT tests, all passing**. Default headless completes
+day 8 win with 0 monitor anomalies. Every simulation rule change must
+land with a focused test — see Phase A/B/C/D regression tests
+(`tests/test_phase_*_*.gd`) as templates.
 
-## Controls
-- F3: toggle debug overlay.
-- F5: save game to `user://save.json`.
-- F9: load game from `user://save.json`.
+## Controls (live play)
 
-## Directory Map
-- `data`: tunable balance JSON.
-- `docs`: project and rule documentation.
-- `scenes/main`: main scene and bootstrapping script.
-- `scenes/ui`: HUD and debug overlay scenes.
-- `scenes/world`: world scene.
-- `scripts/core`: events, balance loading, time, resources, save/load, headless runner.
-- `scripts/world`: map generation, tile rendering, pathfinding, villager rendering.
-- `scripts/sim`: simulation-only logic for villagers, tasks, scoring, orchestration, monitoring.
-- `scripts/ui`: HUD and debug overlay scripts.
-- `tests`: GUT tests.
+- F3 — toggle debug overlay
+- F5 — save to `user://save.json`
+- F9 — load from `user://save.json` (resets in-flight tasks; villagers
+  return to IDLE; resource HUD refreshes via signal)
 
-## Architecture
-Simulation logic is separate from rendering.
+## Directory map
 
-Core flow:
-1. `scenes/main/main.gd` loads `BalanceData`, creates `WorldGenerator`, `PathfindingService`, and `VillageSimulation`.
-2. `VillageSimulation` owns the live simulation state: resources, time, tasks, villagers, population, hunger, campfire state, and monitor.
-3. `TileMapController`, `VillagerView`, `HUD`, and `DebugOverlay` observe or render simulation state.
-4. `Events` is the global signal bus for high-level UI-facing events.
+- `data/` — balance JSON (default + presets)
+- `docs/` — this file, `simulation_rules.md`, `ROADMAP.md`,
+  `DEVELOPMENT_PLAN.md`
+- `scenes/` — `main`, `ui`, `world`
+- `scripts/core/` — balance, time, resources, save/load, headless
+  runner, action logger, global events
+- `scripts/world/` — world generation, pathfinding, tile rendering,
+  villager / wildlife sprite layers
+- `scripts/sim/` — task board, villager AI, utility scorer,
+  construction planner, building defs, nature system, simulation
+  orchestrator, monitor
+- `scripts/ui/` — HUD, debug overlay
+- `tests/` — GUT tests
 
-Rendering should not own gameplay rules. If a rule changes, update simulation code and tests first, then UI if needed.
+## High-level architecture
 
-## Important Classes
-- `BalanceData`: loads tunable numeric values from `data/balance.json`.
-- `GameTime`: advances day/night phases and emits win when day exceeds `days_to_win`.
-- `ResourceStore`: stores wood and food and prevents normal consumption from going below zero.
-- `WorldGenerator`: creates the deterministic 40x27 map and exposes tile queries.
-- `PathfindingService`: wraps `AStarGrid2D`; out-of-bounds start/end returns an empty path.
-- `Task`: data object for task type, target tile, approach tile, status, and claimant.
-- `TaskBoard`: creates, claims, completes, cancels, counts, and deduplicates tasks.
-- `UtilityScorer`: scores open tasks for villagers.
-- `VillagerAgent`: simulation-only villager state, task selection, and tile-by-tile movement.
-- `VillageSimulation`: main simulation orchestrator.
-- `SimulationMonitor`: development-time invariant checker.
-- `SaveManager`: saves and loads JSON state, including recovery for invalid villager positions.
-- `DebugOverlay`: F3 panel with simulation and monitor information.
+Simulation is fully separated from rendering:
 
-## World
-- Map size: 40x27 tiles.
-- Tile size: 36 pixels.
-- Map pixel size: 1440x972.
-- Window viewport: 1440x1032, large enough for the map plus HUD and debug panel.
-- Hut position: `(4, 5)`.
-- Campfire position: `(6, 6)`.
-- Walkable tiles: grass, hut, campfire, house.
-- Unwalkable tiles: trees, berry bushes, blocked tiles, build sites.
-- Build sites become walkable only after construction converts them to houses.
+1. `main.gd` wires `BalanceData`, `WorldGenerator`,
+   `PathfindingService`, and `VillageSimulation` together.
+2. `VillageSimulation` owns mutable state (resources, time, tasks,
+   villagers, buildings, wildlife reference, monitor).
+3. Renderers (`TileMapController`, `VillagerView`, `WildlifeView`, HUD,
+   DebugOverlay) **only read** simulation state via signals and getters.
+4. `Events` autoload carries UI-facing signals
+   (`stock_changed`, `day_started`, `night_started`, `game_won`,
+   `game_lost`). All other signals are direct sim → listener.
 
-## Balance Defaults
-- Starting wood: 10.
-- Starting food: 8.
-- Starting villagers: 3.
-- Days to win: 7.
-- Wood per tree: 3.
-- Food per bush: 2.
-- Food consumed per villager per night: 1.
-- Wood consumed by campfire per night: 2.
-- Day duration: 10 seconds.
-- Night duration: 5 seconds.
-- Villager move interval: 0.5 seconds per path step.
-- Starting population capacity: 3.
-- House wood cost: 8.
-- Capacity gained per house: 2.
-- Food required for new villager: 2.
-- Max hunger before loss: 3.
+`CLAUDE.md` is the authoritative source for mutation order (set_tile →
+set_point_walkable → tile_changed.emit → store.add_resource) and the
+`approach_tile` vs `target_tile` distinction.
 
-## Task Types
-- `gather_food`: target is a berry bush; villager stands on a walkable adjacent `approach_tile`.
-- `chop_tree`: target is a tree; villager stands on a walkable adjacent `approach_tile`.
-- `refuel_campfire`: target and approach tile are the campfire.
-- `return_home`: target and approach tile are the hut.
-- `build_house`: target is a build site; villager stands on a walkable adjacent `approach_tile`.
+## Important classes
 
-## Simulation Monitor
-The monitor is for development/debugging only. It reports anomalies but does not mutate state or cause win/loss.
+| Class | Responsibility |
+|---|---|
+| `BalanceData` | Reflectively loads tunable values; warns on unknown keys |
+| `GameTime` | Day/night phase + signals |
+| `ResourceStore` | wood/food with `stock_changed` signal |
+| `WorldGenerator` | Deterministic 40×27 grid + `_tile_index` cache + reachability guarantees |
+| `PathfindingService` | `AStarGrid2D` wrapper |
+| `Task` / `TaskBoard` | Task data + status transitions + `clear_stale()` |
+| `UtilityScorer` | Pure function — `score_task(v, t, store, _gt) -> float` |
+| `VillagerAgent` | Two-state machine (IDLE / MOVING_TO_TARGET) |
+| `WildlifeAgent` | Deer / wolf entity |
+| `NatureSystem` | Wildlife + regrowth + wolf threat check |
+| `BuildingDefs` | Data table for 4 building types |
+| `ConstructionPlanner` | One-decision-per-day site picker |
+| `VillageSimulation` | Orchestrator + signal source |
+| `SimulationMonitor` | Anomaly checker (no state mutation) |
+| `ActionLogger` | JSONL writer for headless audits |
+| `SaveManager` | Full-grid snapshot + idle reset on load |
 
-It checks:
-- Villager positions are in bounds.
-- Villagers stand on walkable tiles.
-- Villager paths contain only in-bounds, walkable tiles.
-- Task targets and approach tiles are in bounds.
-- Claimed tasks point to an existing villager.
-- Resource stock is not negative.
-- Population does not exceed population capacity.
+## Balance highlights (default preset)
 
-`VillageSimulation` emits `monitor_anomalies_changed(anomalies)` when monitor output changes.
-Each anomaly is a dictionary with `code`, `severity`, and `message`.
-The F3 overlay shows `Monitor: OK` or the highest-priority anomalies.
+| Key | Value |
+|---|---|
+| starting_wood / starting_food | 10 / 8 |
+| villager_count / days_to_win | 3 / 7 |
+| wood_per_tree / food_per_bush | 3 / 2 |
+| food / wood low_threshold | 6 / 6 |
+| food / wood surplus_threshold | 12 / 12 |
+| max_campfire_out_nights | 2 |
+| max_hunger | 3 |
+| wolf_threat_radius | 8 |
 
-## Save/Load Notes
-- Save path: `user://save.json`.
-- Saves include day, phase, tick, resources, campfire state, hunger count, population capacity, villagers, tasks, and houses.
-- Loading a save resets any villager whose saved position is out of bounds or unwalkable to a valid spawn tile near the hut.
-- Loading also reapplies build site and house walkability to pathfinding.
-- After load, `VillageSimulation.run_monitor_check()` runs.
+Full schema in `scripts/core/balance_data.gd`.
 
-## Development Rules
-- Keep the MVP small.
-- No external AI frameworks.
-- No ECS.
-- No GOAP.
-- Keep simulation rules separate from rendering.
-- Prefer deterministic behavior.
-- Every simulation rule needs a test.
-- Do not change unrelated files.
-- Update `docs/simulation_rules.md` when a rule changes.
+## What's deliberately NOT here
+
+- No needs beyond hunger (no mood, tiredness, cold).
+- No routines / schedules / shifts.
+- No skills / XP / tools-with-durability.
+- No combat system; wolf attacks reuse the hunger track.
+- No mod loader, scripting API, multi-map, or save-format versioning.
+
+These are listed exhaustively in `ROADMAP.md`'s anti-features section and
+are binding.
+
+## Development rules
+
+- Every new simulation rule ships with a GUT test.
+- Per-file cap: 600 lines. `village_simulation.gd` currently ~600;
+  splitting is the next refactor when crossed.
+- `task` types capped at 10 (currently 7).
+- No state lock primitives. If thrashing requires a lock, the priority
+  graph is wrong.
+- Balance is the only knob for behavior tuning — no magic numbers in
+  `.gd`.
+- Headless run + tests must stay green between commits.
+- When updating any sim rule, also update `simulation_rules.md` in the
+  same commit. Codex / Claude trust that doc.

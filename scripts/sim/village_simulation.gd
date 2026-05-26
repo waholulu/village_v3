@@ -143,6 +143,10 @@ func _reset_state() -> void:
 	_wolf_threat_count = 0
 	_monitor_throttle_counter = 0
 	_next_villager_id = 1
+	# Default-on; setup_for_test() flips it to false after _reset_state runs.
+	# Without this reset, a reused instance could leak the test setting into a
+	# real setup() call and silently disable task generation.
+	_task_gen_enabled = true
 	monitor = null
 	nature = null
 	monitor_anomalies.clear()
@@ -222,7 +226,6 @@ func _on_night_started(_day: int) -> void:
 	resolve_night()
 	if nature != null and nature.check_wolf_threat(campfire_out_nights):
 		_apply_wolf_disruption()
-	_generate_return_home_tasks()
 
 func _apply_wolf_disruption() -> void:
 	if villagers.is_empty():
@@ -252,10 +255,21 @@ func _apply_wolf_disruption() -> void:
 		"fences": _fence_count, "watchtowers": _watchtower_count,
 		"new_hunger": villagers[idx].hunger})
 	_update_hungry_count()
+	# Wolf damage runs AFTER _resolve_hunger's starvation check, so a wolf-pushed
+	# overflow has to be re-checked here or the game would survive one extra night.
+	if villagers[idx].hunger >= _balance.max_hunger:
+		game_lost.emit("A villager starved")
 
 func _on_day_started(_day: int) -> void:
-	_cancel_open_tasks_of_type("return_home", "stale_at_day_start")
+	# Hunt tasks pinned to last-day's deer positions are stale by now.
+	# return_home / refuel_campfire used to be cancelled here too but those
+	# task types were removed in the Phase C cleanup (Codex/Claude: do not
+	# resurrect them — see ROADMAP anti-features).
 	_cancel_open_tasks_of_type("hunt_deer", "stale_at_day_start")
+	# Purge COMPLETED/CANCELLED tasks so the board doesn't accumulate forever.
+	# Only OPEN/CLAIMED tasks survive — those are the only ones the planner
+	# and scorer ever look at anyway.
+	board.clear_stale()
 	_update_nature_for_day(_day)
 	if nature != null:
 		wildlife_changed.emit(nature.get_animals_as_dicts())
@@ -343,10 +357,6 @@ func _diff_log_animals(before: Array[Dictionary], after: Array[Dictionary]) -> v
 			if a["kind"] == WildlifeAgent.Kind.WOLF:
 				_log({"event": "wolf_despawned", "id": a["id"], "reason": "age"})
 
-func _generate_return_home_tasks() -> void:
-	for v in villagers:
-		board.create_task("return_home", WorldGenerator.HUT_POS, game_time.tick)
-
 func _cancel_open_tasks_of_type(task_type: String, reason: String = "bulk_cancel") -> void:
 	# Bulk-cancel every OPEN task of `task_type`. Emits one task_cancelled event
 	# per affected task so audits can attribute cancellations to a cause
@@ -394,12 +404,7 @@ func _generate_tasks() -> void:
 	if wood < _balance.wood_low_threshold:
 		for tree_pos in world_gen.get_tiles_of_type(WorldGenerator.TileType.TREE):
 			_try_create_resource_task("chop_tree", tree_pos)
-	if wood < _balance.wood_campfire_urgent_threshold and game_time.get_time_left() < _balance.time_left_urgent_seconds:
-		if not board.has_open_task_of_type("refuel_campfire"):
-			# Campfire is walkable, so target == approach.
-			board.create_task("refuel_campfire", WorldGenerator.CAMPFIRE_POS, game_time.tick)
-	# build_house (and all other build_* tasks) are now created by
-	# ConstructionPlanner in _on_day_started, not here.
+	# build_* tasks are created by ConstructionPlanner in _on_day_started.
 
 func _try_create_resource_task(task_type: String, target_tile: Vector2i) -> void:
 	# Per-tile dedupe: don't queue the same tree/bush twice.
@@ -467,6 +472,8 @@ func _execute_task_at_target(v: VillagerAgent) -> void:
 			if nature:
 				nature.record_harvest(WorldGenerator.TileType.BERRY_BUSH, task.target_tile, game_time.day)
 			world_gen.set_tile(task.target_tile.x, task.target_tile.y, WorldGenerator.TileType.GRASS)
+			if pathfinding:
+				pathfinding.set_point_walkable(task.target_tile, true)
 			tile_changed.emit(task.target_tile, WorldGenerator.TileType.GRASS)
 			store.add_resource("food", _balance.food_per_bush)
 			_log({"event": "task_completed", "villager": v.name, "task": "gather_food",
@@ -487,10 +494,6 @@ func _execute_task_at_target(v: VillagerAgent) -> void:
 		"build_house", "build_fence", "build_watchtower", "build_storage":
 			if not _execute_build(v, task):
 				return
-		"refuel_campfire", "return_home":
-			# MVP placeholder — no per-villager side effect; campfire upkeep is
-			# resolved automatically by resolve_night() against the global wood pool.
-			pass
 	board.complete_task(task.id)
 	v.clear_task()
 

@@ -4,6 +4,10 @@ extends RefCounted
 const SAVE_PATH = "user://save.json"
 
 func save(sim: VillageSimulation) -> void:
+	# Snapshot the full grid; building counters, building positions, and
+	# resource-tile positions are all derivable from it. Tasks and per-villager
+	# state are intentionally NOT saved — F9 resets in-flight work to IDLE and
+	# the next tick rebuilds the task list against the loaded world.
 	var data = {
 		"day": sim.game_time.day,
 		"phase": sim.game_time.get_phase_name(),
@@ -12,17 +16,10 @@ func save(sim: VillageSimulation) -> void:
 		"food": sim.store.get_resource("food"),
 		"campfire_out_nights": sim.campfire_out_nights,
 		"population_capacity": sim.population_capacity,
-		"fence_count": sim._fence_count,
-		"watchtower_count": sim._watchtower_count,
-		"storage_count": sim._storage_count,
 		"wolf_threat_count": sim._wolf_threat_count,
 		"nature": sim.nature.to_save_data() if sim.nature else {},
 		"villagers": [],
-		"tasks": [],
-		"houses": [],
-		"fences": [],
-		"watchtowers": [],
-		"storages": []
+		"tiles": _serialize_grid(sim.world_gen),
 	}
 	for v in sim.villagers:
 		data["villagers"].append({
@@ -30,33 +27,21 @@ func save(sim: VillageSimulation) -> void:
 			"name": v.name,
 			"tile_x": v.tile_position.x,
 			"tile_y": v.tile_position.y,
-			"state": v.get_state_name(),
 			"hunger": v.hunger,
-			"current_task_id": v.current_task_id
 		})
-	for t in sim.board._tasks:
-		data["tasks"].append({
-			"id": t.id,
-			"type": t.type,
-			"target_x": t.target_tile.x,
-			"target_y": t.target_tile.y,
-			"approach_x": t.approach_tile.x,
-			"approach_y": t.approach_tile.y,
-			"status": Task.Status.keys()[t.status],
-			"claimed_by": t.claimed_by
-		})
-	for house_pos in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.HOUSE):
-		data["houses"].append({"x": house_pos.x, "y": house_pos.y})
-	for p in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.FENCE):
-		data["fences"].append({"x": p.x, "y": p.y})
-	for p in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.WATCHTOWER):
-		data["watchtowers"].append({"x": p.x, "y": p.y})
-	for p in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.STORAGE):
-		data["storages"].append({"x": p.x, "y": p.y})
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	file.store_string(JSON.stringify(data, "\t"))
 	file.close()
 	print("Saved to ", SAVE_PATH)
+
+func _serialize_grid(world_gen: WorldGenerator) -> Array:
+	var rows: Array = []
+	for y in range(WorldGenerator.HEIGHT):
+		var row: Array = []
+		for x in range(WorldGenerator.WIDTH):
+			row.append(int(world_gen.get_tile(x, y)))
+		rows.append(row)
+	return rows
 
 func load_into(sim: VillageSimulation) -> bool:
 	if not FileAccess.file_exists(SAVE_PATH):
@@ -68,61 +53,85 @@ func load_into(sim: VillageSimulation) -> bool:
 		push_error("Save file parse error")
 		return false
 	var data: Dictionary = json.get_data()
+
+	# Resources first — store.setup() emits stock_changed so HUD refreshes.
 	sim.store.setup(data["wood"], data["food"])
 	sim.campfire_out_nights = data["campfire_out_nights"]
 	sim.population_capacity = data.get("population_capacity", sim.population_capacity)
-	sim._fence_count = data.get("fence_count", 0)
-	sim._watchtower_count = data.get("watchtower_count", 0)
-	sim._storage_count = data.get("storage_count", 0)
 	sim._wolf_threat_count = data.get("wolf_threat_count", 0)
 	if sim.nature != null:
 		sim.nature.load_save_data(data.get("nature", {}))
 	sim.game_time.day = data["day"]
 	sim.game_time.tick = data["tick"]
 	sim.game_time.phase = GameTime.Phase.DAY if data["phase"] == "Day" else GameTime.Phase.NIGHT
-	while sim.villagers.size() < data["villagers"].size():
-		sim._add_villager()
-	while sim.villagers.size() > data["villagers"].size():
-		sim.villagers.remove_at(sim.villagers.size() - 1)
-	var max_id := 0
-	for i in range(sim.villagers.size()):
-		if i < data["villagers"].size():
-			var vd = data["villagers"][i]
-			sim.villagers[i].id = vd["id"]
-			sim.villagers[i].name = vd["name"]
-			var loaded_pos := Vector2i(vd["tile_x"], vd["tile_y"])
-			if sim.world_gen.is_in_bounds(loaded_pos) and sim.world_gen.is_walkable(loaded_pos.x, loaded_pos.y):
-				sim.villagers[i].tile_position = loaded_pos
-			else:
-				sim.villagers[i].tile_position = sim.find_valid_spawn_tile(i)
-			sim.villagers[i].hunger = vd.get("hunger", 0)
-			max_id = maxi(max_id, sim.villagers[i].id)
-	sim._next_villager_id = max_id + 1
-	for site in sim.world_gen.build_sites:
-		sim.world_gen.set_tile(site.x, site.y, WorldGenerator.TileType.BUILD_SITE)
-		if sim.pathfinding:
-			sim.pathfinding.set_point_walkable(site, false)
-		sim.tile_changed.emit(site, WorldGenerator.TileType.BUILD_SITE)
-	for house in data.get("houses", []):
-		var pos := Vector2i(house["x"], house["y"])
-		sim.world_gen.set_tile(pos.x, pos.y, WorldGenerator.TileType.HOUSE)
-		if sim.pathfinding:
-			sim.pathfinding.set_point_walkable(pos, true)
-		sim.tile_changed.emit(pos, WorldGenerator.TileType.HOUSE)
-	_restore_buildings(sim, data.get("fences", []), WorldGenerator.TileType.FENCE)
-	_restore_buildings(sim, data.get("watchtowers", []), WorldGenerator.TileType.WATCHTOWER)
-	_restore_buildings(sim, data.get("storages", []), WorldGenerator.TileType.STORAGE)
+
+	# Restore the world grid. set_tile keeps WorldGenerator._tile_index in
+	# sync; the pathfinding rebuild below picks up the new walkability.
+	_restore_grid(sim, data.get("tiles", []))
+
+	# Building counters are derived from the restored grid — never persisted,
+	# never drifting from tile counts.
+	sim._fence_count = sim.world_gen.count_tiles_of_type(WorldGenerator.TileType.FENCE)
+	sim._watchtower_count = sim.world_gen.count_tiles_of_type(WorldGenerator.TileType.WATCHTOWER)
+	sim._storage_count = sim.world_gen.count_tiles_of_type(WorldGenerator.TileType.STORAGE)
+
+	# Drop the live task board — tasks regenerate next tick against the loaded
+	# world. Villagers reset to IDLE so they re-decide instead of resuming a
+	# task that may no longer be valid.
+	sim.board = TaskBoard.new()
+	_restore_villagers(sim, data["villagers"])
+
+	# Rebuild pathfinding from the restored world so AStar reflects loaded
+	# walls / build_sites / harvested tiles.
+	if sim.pathfinding != null:
+		sim.pathfinding.setup(sim.world_gen)
+
+	# Broadcast every tile so the tilemap controller, debug overlay, and any
+	# other tile_changed listeners redraw against the loaded grid.
+	for y in range(WorldGenerator.HEIGHT):
+		for x in range(WorldGenerator.WIDTH):
+			sim.tile_changed.emit(Vector2i(x, y), sim.world_gen.get_tile(x, y))
+
 	sim.population_changed.emit(sim.villagers.size(), sim.population_capacity)
-	# Hungry count is derived from villager state — recompute rather than persist.
-	sim._update_hungry_count()
+	sim._update_hungry_count()  # derives + emits hunger_changed
 	sim.run_monitor_check()
 	print("Loaded from ", SAVE_PATH)
 	return true
 
-func _restore_buildings(sim: VillageSimulation, entries: Array, tile_type: int) -> void:
-	for entry in entries:
-		var pos := Vector2i(entry["x"], entry["y"])
-		sim.world_gen.set_tile(pos.x, pos.y, tile_type)
-		if sim.pathfinding:
-			sim.pathfinding.set_point_walkable(pos, true)
-		sim.tile_changed.emit(pos, tile_type)
+func _restore_grid(sim: VillageSimulation, tiles: Array) -> void:
+	if tiles.is_empty():
+		return  # nothing to do; caller already warned via parse
+	for y in range(WorldGenerator.HEIGHT):
+		if y >= tiles.size():
+			break
+		var row: Array = tiles[y]
+		for x in range(WorldGenerator.WIDTH):
+			if x >= row.size():
+				break
+			sim.world_gen.set_tile(x, y, int(row[x]))
+
+func _restore_villagers(sim: VillageSimulation, entries: Array) -> void:
+	while sim.villagers.size() < entries.size():
+		sim._add_villager()
+	while sim.villagers.size() > entries.size():
+		sim.villagers.remove_at(sim.villagers.size() - 1)
+	var max_id := 0
+	for i in range(sim.villagers.size()):
+		var vd: Dictionary = entries[i]
+		var v: VillagerAgent = sim.villagers[i]
+		v.id = vd["id"]
+		v.name = vd["name"]
+		var loaded_pos := Vector2i(vd["tile_x"], vd["tile_y"])
+		if sim.world_gen.is_in_bounds(loaded_pos) and sim.world_gen.is_walkable(loaded_pos.x, loaded_pos.y):
+			v.tile_position = loaded_pos
+		else:
+			v.tile_position = sim.find_valid_spawn_tile(i)
+		v.hunger = vd.get("hunger", 0)
+		# Reset every transient: villager re-decides on next tick instead of
+		# resuming a task that may not exist (board was just emptied).
+		v.state = VillagerAgent.State.IDLE
+		v.current_task_id = -1
+		v._path.clear()
+		v._move_timer = 0.0
+		max_id = maxi(max_id, v.id)
+	sim._next_villager_id = max_id + 1

@@ -77,12 +77,6 @@ func test_game_won_signal_forwarded() -> void:
 		sim.game_time._advance_phase()
 	assert_signal_emitted(sim, "game_won")
 
-func test_open_return_home_tasks_are_cancelled_at_day_start() -> void:
-	sim._generate_return_home_tasks()
-	sim._on_day_started(2)
-	assert_eq(sim.board.count_by_status(Task.Status.OPEN), 0)
-	assert_eq(sim.board.count_by_status(Task.Status.CANCELLED), 3)
-
 func test_setup_for_test_is_idempotent() -> void:
 	sim.setup_for_test(5, 5, 3)
 	assert_eq(sim.villagers.size(), 3, "Villager array must not accumulate across setup calls")

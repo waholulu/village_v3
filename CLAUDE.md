@@ -87,9 +87,11 @@ All numeric parameters live in `data/balance.json` and are loaded into `BalanceD
 ### Adding a new task type
 
 1. Add the type string to `UtilityScorer.score_task` match block
-2. Handle the type in `VillageSimulation._execute_task_at_target` match block  
-3. Add task generation logic in `_generate_tasks` (or `_on_night_started` for night tasks)
+2. Handle the type in `VillageSimulation._execute_task_at_target` match block
+3. Add task generation logic in `_generate_tasks` (day-time generation only — there are no night-time tasks; `_on_night_started` is for resolution, not creation)
 4. If the target tile is non-walkable, use `_try_create_resource_task` (handles approach tile + dedup automatically)
+
+For buildings specifically, the planner already covers the create + score steps via the `BuildingDefs` table — see Phase 0 plan. Do **not** add `return_home` or `refuel_campfire`-style placeholder tasks; they were removed and the anti-feature list in `ROADMAP.md` prohibits resurrection.
 
 ### SimulationMonitor
 
