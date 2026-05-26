@@ -22,48 +22,24 @@ func _ready() -> void:
 
 func setup(sim: VillageSimulation) -> void:
 	_sim = sim
-	_refresh_snapshot()
-
-func _process(_delta: float) -> void:
-	_refresh_snapshot()
-
-func update_resources(wood: int, food: int) -> void:
-	_lbl_wood.text = "Wood: %d" % wood
-	_lbl_food.text = "Food: %d" % food
-
-func update_population(current: int, capacity: int) -> void:
-	_lbl_population.text = "Pop: %d/%d" % [current, capacity]
-
-func update_hunger(hungry_count: int) -> void:
-	_lbl_hungry.text = "Hungry: %d" % hungry_count
-
-func update_campfire(out_nights: int) -> void:
-	_lbl_campfire.text = "Campfire out: %d" % out_nights
-
-func _refresh_snapshot() -> void:
-	if _sim == null:
-		return
-	var snapshot := _sim.get_snapshot()
-	_lbl_day.text = "Day %d/%d - %s" % [snapshot["day"], snapshot["days_to_win"], snapshot["phase"]]
-	_lbl_wood.text = "Wood: %d" % snapshot["wood"]
-	_lbl_food.text = "Food: %d" % snapshot["food"]
-	_lbl_population.text = "Pop: %d/%d" % [snapshot["population"], snapshot["population_capacity"]]
-	_lbl_hungry.text = "Hungry: %d" % snapshot["hungry"]
-	_lbl_campfire.text = "Campfire out: %d" % snapshot["campfire_out"]
-	var tasks: Dictionary = snapshot["tasks"]
-	_lbl_tasks.text = "Tasks: %d open / %d claimed" % [tasks["open"], tasks["claimed"]]
-	var nature: Dictionary = snapshot["nature"]
-	_lbl_nature.text = "Nature: wildlife %d, regrow T%d/B%d" % [
-		nature.get("wildlife_food", 0),
-		nature.get("pending_trees", 0),
-		nature.get("pending_berry_bushes", 0)
-	]
-	var risk: Dictionary = snapshot["risk"]
-	_lbl_ai.text = "AI: %s  risk F%d/W%d" % [
-		snapshot["ai_status"],
-		risk["food_shortfall"],
-		risk["wood_shortfall"]
-	]
+	# Connect directly to sim signals for the labels that don't have an Events
+	# autoload entry. Everything is now event-driven; no per-frame polling.
+	sim.population_changed.connect(_on_population_changed)
+	sim.hunger_changed.connect(_on_hunger_changed)
+	sim.wildlife_changed.connect(_on_wildlife_changed)
+	sim.monitor_anomalies_changed.connect(_on_monitor_anomalies_changed)
+	sim.game_time.day_started.connect(_refresh_tasks_label.unbind(1))
+	sim.game_time.night_started.connect(_on_night_started_refresh)
+	# Initial-state push so labels aren't blank before the first signal fires.
+	_lbl_wood.text = "Wood: %d" % sim.store.get_resource("wood")
+	_lbl_food.text = "Food: %d" % sim.store.get_resource("food")
+	_on_population_changed(sim.villagers.size(), sim.population_capacity)
+	_on_hunger_changed(sim.hungry_villagers)
+	_lbl_campfire.text = "Campfire out: %d" % sim.campfire_out_nights
+	_lbl_day.text = "Day %d/%d — %s" % [sim.game_time.day, sim._balance.days_to_win, sim.game_time.get_phase_name()]
+	_refresh_tasks_label()
+	_on_wildlife_changed(sim.nature.get_animals_as_dicts() if sim.nature else [])
+	_on_monitor_anomalies_changed(sim.monitor_anomalies)
 
 func _on_stock_changed(resource_name: String, amount: int) -> void:
 	if resource_name == "wood":
@@ -72,10 +48,63 @@ func _on_stock_changed(resource_name: String, amount: int) -> void:
 		_lbl_food.text = "Food: %d" % amount
 
 func _on_day_started(day: int) -> void:
-	_lbl_day.text = "Day %d — Day" % day
+	if _sim != null:
+		_lbl_day.text = "Day %d/%d — Day" % [day, _sim._balance.days_to_win]
+	else:
+		_lbl_day.text = "Day %d — Day" % day
 
 func _on_night_started(day: int) -> void:
-	_lbl_day.text = "Day %d — Night" % day
+	if _sim != null:
+		_lbl_day.text = "Day %d/%d — Night" % [day, _sim._balance.days_to_win]
+	else:
+		_lbl_day.text = "Day %d — Night" % day
+
+func _on_night_started_refresh(_day: int) -> void:
+	# Campfire counter only updates after night resolution, so refresh on night
+	# transitions. Tasks counter refreshes here too (cheap, infrequent).
+	if _sim == null:
+		return
+	_lbl_campfire.text = "Campfire out: %d" % _sim.campfire_out_nights
+	_refresh_tasks_label()
+
+func _on_population_changed(current: int, capacity: int) -> void:
+	_lbl_population.text = "Pop: %d/%d" % [current, capacity]
+
+func _on_hunger_changed(hungry_count: int) -> void:
+	_lbl_hungry.text = "Hungry: %d" % hungry_count
+
+func _on_wildlife_changed(animals: Array) -> void:
+	var deer := 0
+	var wolves := 0
+	for a in animals:
+		if a.get("kind", 0) == WildlifeAgent.Kind.WOLF:
+			wolves += 1
+		else:
+			deer += 1
+	var pending_t := 0
+	var pending_b := 0
+	if _sim != null and _sim.nature != null:
+		pending_t = _sim.nature.get_pending_count(WorldGenerator.TileType.TREE)
+		pending_b = _sim.nature.get_pending_count(WorldGenerator.TileType.BERRY_BUSH)
+	_lbl_nature.text = "Nature: deer %d wolves %d, regrow T%d/B%d" % [deer, wolves, pending_t, pending_b]
+
+func _on_monitor_anomalies_changed(anomalies: Array[Dictionary]) -> void:
+	if _sim == null:
+		_lbl_ai.text = ""
+		return
+	var food_needed: int = _sim.villagers.size() * _sim._balance.food_consumed_per_villager_per_night
+	var wood_needed: int = _sim._balance.wood_consumed_by_campfire_per_night
+	var food_short: int = maxi(0, food_needed - _sim.store.get_resource("food"))
+	var wood_short: int = maxi(0, wood_needed - _sim.store.get_resource("wood"))
+	var status: String = "Attention" if food_short > 0 or wood_short > 0 or anomalies.size() > 0 else "Stable"
+	_lbl_ai.text = "AI: %s  risk F%d/W%d" % [status, food_short, wood_short]
+
+func _refresh_tasks_label() -> void:
+	if _sim == null:
+		return
+	var open: int = _sim.board.count_by_status(Task.Status.OPEN)
+	var claimed: int = _sim.board.count_by_status(Task.Status.CLAIMED)
+	_lbl_tasks.text = "Tasks: %d open / %d claimed" % [open, claimed]
 
 func _on_game_won() -> void:
 	_lbl_status.text = "YOU WIN!"

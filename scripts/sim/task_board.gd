@@ -4,8 +4,9 @@ extends RefCounted
 var _tasks: Array[Task] = []
 var _next_id: int = 1
 
-func create_task(type: String, target_tile: Vector2i, tick: int) -> Task:
-	var task = Task.new(_next_id, type, target_tile, tick)
+func create_task(type: String, target_tile: Vector2i, _tick: int = 0) -> Task:
+	# `_tick` retained for caller compatibility; Task no longer stores it.
+	var task = Task.new(_next_id, type, target_tile)
 	_next_id += 1
 	_tasks.append(task)
 	return task

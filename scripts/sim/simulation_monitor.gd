@@ -82,6 +82,10 @@ func _check_tasks(sim: VillageSimulation, anomalies: Array[Dictionary]) -> void:
 	for v in sim.villagers:
 		villager_ids[v.id] = true
 	for task in sim.board._tasks:
+		# Completed/cancelled tasks are historical — their tiles may have been
+		# legitimately mutated since (e.g. regrowth), so skip the geometry checks.
+		if task.status != Task.Status.OPEN and task.status != Task.Status.CLAIMED:
+			continue
 		if not sim.world_gen.is_in_bounds(task.target_tile):
 			anomalies.append(_anomaly(
 				"task_target_out_of_bounds",

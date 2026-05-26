@@ -78,7 +78,7 @@ Each night, each villager is fed individually; if food is insufficient a village
 
 ### Key constants
 
-`WorldGenerator.WIDTH = 20`, `WorldGenerator.HEIGHT = 16`. Grid is 20×16 (expanded from original 12×12). `HUT_POS = Vector2i(4, 5)`, `CAMPFIRE_POS = Vector2i(6, 6)`.
+`WorldGenerator.WIDTH = 40`, `WorldGenerator.HEIGHT = 27`. `HUT_POS = Vector2i(4, 5)`, `CAMPFIRE_POS = Vector2i(6, 6)`.
 
 ### Balance tuning
 

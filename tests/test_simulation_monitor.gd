@@ -94,7 +94,8 @@ func test_monitor_signal_emits_when_anomalies_change() -> void:
 
 func test_food_survival_risk_when_no_food_source_available() -> void:
 	sim.store.consume_resource("food", sim.store.get_resource("food"))
-	sim.nature.wildlife_food = 0
+	# wildlife_food is now a computed getter (deer count); no assignment needed —
+	# animals start empty at setup time so wildlife_food is already 0.
 	for bush in wg.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH):
 		wg.set_tile(bush.x, bush.y, WorldGenerator.TileType.GRASS)
 	assert_true(_has_code(sim.run_monitor_check(), "food_survival_risk"))

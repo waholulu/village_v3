@@ -48,9 +48,15 @@ func _build_debug_text() -> String:
 	lines.append("Tasks cancelled: %d" % tasks["cancelled"])
 	lines.append("")
 	lines.append("NATURE")
-	lines.append("Wildlife food: %d" % nature.get("wildlife_food", 0))
+	lines.append("Deer: %d  Wolves: %d" % [nature.get("deer_count", 0), nature.get("wolf_count", 0)])
 	lines.append("Pending trees: %d" % nature.get("pending_trees", 0))
 	lines.append("Pending berries: %d" % nature.get("pending_berry_bushes", 0))
+	lines.append("")
+	lines.append("BUILDINGS")
+	lines.append("Houses: %d  Fences: %d  Towers: %d  Storage: %d" % [
+		_sim.world_gen.count_tiles_of_type(WorldGenerator.TileType.HOUSE) if _sim.world_gen else 0,
+		_sim._fence_count, _sim._watchtower_count, _sim._storage_count
+	])
 	lines.append("")
 	lines.append("AI STATUS")
 	lines.append("Status: %s" % snapshot["ai_status"])

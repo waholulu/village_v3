@@ -11,12 +11,18 @@ func save(sim: VillageSimulation) -> void:
 		"wood": sim.store.get_resource("wood"),
 		"food": sim.store.get_resource("food"),
 		"campfire_out_nights": sim.campfire_out_nights,
-		"hungry_villagers": sim.hungry_villagers,
 		"population_capacity": sim.population_capacity,
+		"fence_count": sim._fence_count,
+		"watchtower_count": sim._watchtower_count,
+		"storage_count": sim._storage_count,
+		"wolf_threat_count": sim._wolf_threat_count,
 		"nature": sim.nature.to_save_data() if sim.nature else {},
 		"villagers": [],
 		"tasks": [],
-		"houses": []
+		"houses": [],
+		"fences": [],
+		"watchtowers": [],
+		"storages": []
 	}
 	for v in sim.villagers:
 		data["villagers"].append({
@@ -40,10 +46,13 @@ func save(sim: VillageSimulation) -> void:
 			"claimed_by": t.claimed_by
 		})
 	for house_pos in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.HOUSE):
-		data["houses"].append({
-			"x": house_pos.x,
-			"y": house_pos.y
-		})
+		data["houses"].append({"x": house_pos.x, "y": house_pos.y})
+	for p in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.FENCE):
+		data["fences"].append({"x": p.x, "y": p.y})
+	for p in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.WATCHTOWER):
+		data["watchtowers"].append({"x": p.x, "y": p.y})
+	for p in sim.world_gen.get_tiles_of_type(WorldGenerator.TileType.STORAGE):
+		data["storages"].append({"x": p.x, "y": p.y})
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	file.store_string(JSON.stringify(data, "\t"))
 	file.close()
@@ -61,8 +70,11 @@ func load_into(sim: VillageSimulation) -> bool:
 	var data: Dictionary = json.get_data()
 	sim.store.setup(data["wood"], data["food"])
 	sim.campfire_out_nights = data["campfire_out_nights"]
-	sim.hungry_villagers = data["hungry_villagers"]
 	sim.population_capacity = data.get("population_capacity", sim.population_capacity)
+	sim._fence_count = data.get("fence_count", 0)
+	sim._watchtower_count = data.get("watchtower_count", 0)
+	sim._storage_count = data.get("storage_count", 0)
+	sim._wolf_threat_count = data.get("wolf_threat_count", 0)
 	if sim.nature != null:
 		sim.nature.load_save_data(data.get("nature", {}))
 	sim.game_time.day = data["day"]
@@ -97,8 +109,20 @@ func load_into(sim: VillageSimulation) -> bool:
 		if sim.pathfinding:
 			sim.pathfinding.set_point_walkable(pos, true)
 		sim.tile_changed.emit(pos, WorldGenerator.TileType.HOUSE)
+	_restore_buildings(sim, data.get("fences", []), WorldGenerator.TileType.FENCE)
+	_restore_buildings(sim, data.get("watchtowers", []), WorldGenerator.TileType.WATCHTOWER)
+	_restore_buildings(sim, data.get("storages", []), WorldGenerator.TileType.STORAGE)
 	sim.population_changed.emit(sim.villagers.size(), sim.population_capacity)
-	sim.hunger_changed.emit(sim.hungry_villagers)
+	# Hungry count is derived from villager state — recompute rather than persist.
+	sim._update_hungry_count()
 	sim.run_monitor_check()
 	print("Loaded from ", SAVE_PATH)
 	return true
+
+func _restore_buildings(sim: VillageSimulation, entries: Array, tile_type: int) -> void:
+	for entry in entries:
+		var pos := Vector2i(entry["x"], entry["y"])
+		sim.world_gen.set_tile(pos.x, pos.y, tile_type)
+		if sim.pathfinding:
+			sim.pathfinding.set_point_walkable(pos, true)
+		sim.tile_changed.emit(pos, tile_type)

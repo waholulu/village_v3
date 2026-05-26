@@ -1,7 +1,7 @@
 class_name VillagerAgent
 extends RefCounted
 
-enum State { IDLE, MOVING_TO_TARGET, GATHERING, DELIVERING, RETURNING_HOME, SLEEPING }
+enum State { IDLE, MOVING_TO_TARGET }
 
 var id: int
 var name: String
@@ -9,7 +9,6 @@ var tile_position: Vector2i
 var state: State = State.IDLE
 var current_task_id: int = -1
 var hunger: int = 0
-var energy: float = 100.0
 
 var _path: Array[Vector2i] = []
 var _move_timer: float = 0.0

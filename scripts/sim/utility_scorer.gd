@@ -10,8 +10,8 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, gt: G
 	match task.type:
 		"gather_food":
 			score += maxf(0.0, 10.0 - float(food)) * 3.0
-		"gather_wildlife":
-			score += maxf(0.0, 10.0 - float(food)) * 2.5
+		"hunt_deer":
+			score += maxf(0.0, 10.0 - float(food)) * 2.8
 		"chop_tree":
 			score += maxf(0.0, 10.0 - float(wood)) * 2.0
 		"refuel_campfire":
@@ -23,6 +23,12 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, gt: G
 				score += 100.0
 		"build_house":
 			score += 25.0
+		"build_watchtower":
+			score += 20.0
+		"build_fence":
+			score += 15.0
+		"build_storage":
+			score += 12.0
 
 	score -= dist * 0.5
 	return score

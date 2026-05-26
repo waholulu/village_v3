@@ -22,17 +22,17 @@ func before_each() -> void:
 	sim.setup(balance, wg, pf)
 
 func test_build_task_generated_when_population_at_capacity_and_wood_available() -> void:
-	sim._generate_tasks()
+	sim._run_construction_planner()
 	assert_true(sim.board.has_active_task_of_type("build_house"))
 
 func test_build_task_not_generated_without_enough_wood() -> void:
 	sim.store.consume_resource("wood", 8)
-	sim._generate_tasks()
+	sim._run_construction_planner()
 	assert_false(sim.board.has_active_task_of_type("build_house"))
 
 func test_build_task_not_generated_when_population_growth_disabled() -> void:
 	sim._balance.population_growth_enabled = false
-	sim._generate_tasks()
+	sim._run_construction_planner()
 	assert_false(sim.board.has_active_task_of_type("build_house"))
 
 func test_build_house_completion_consumes_wood_places_house_and_increases_capacity() -> void:

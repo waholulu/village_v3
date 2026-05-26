@@ -12,6 +12,9 @@ const TILE_COLORS: Array[Color] = [
 	Color(0.15, 0.15, 0.15), # 5 BLOCKED
 	Color(0.45, 0.42, 0.35), # 6 BUILD_SITE
 	Color(0.72, 0.46, 0.22), # 7 HOUSE
+	Color(0.55, 0.40, 0.20), # 8 FENCE — dark brown
+	Color(0.40, 0.40, 0.45), # 9 WATCHTOWER — slate grey
+	Color(0.65, 0.50, 0.30), # 10 STORAGE — tan
 ]
 
 func setup(world_gen: WorldGenerator) -> void:

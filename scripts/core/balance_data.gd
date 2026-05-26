@@ -11,6 +11,12 @@ var food_consumed_per_villager_per_night: int = 1
 var wood_consumed_by_campfire_per_night: int = 2
 var food_low_threshold: int = 6
 var wood_low_threshold: int = 6
+# Surplus thresholds gate when to *cancel* open tasks (vs. low_threshold which
+# gates when to *create* them). The gap between low and surplus lets idle
+# villagers keep working on existing OPEN tasks instead of going idle the
+# moment stock crosses the low_threshold.
+var food_surplus_threshold: int = 12
+var wood_surplus_threshold: int = 12
 var wood_campfire_urgent_threshold: int = 4
 var time_left_urgent_seconds: float = 3.0
 var day_duration_seconds: float = 10.0
@@ -31,13 +37,35 @@ var nature_tree_regrowth_days: int = 2
 var nature_berry_regrowth_days: int = 1
 var nature_max_trees: int = 36
 var nature_max_berry_bushes: int = 24
-var wildlife_food_start: int = 2
-var wildlife_food_regrowth_per_day: int = 1
-var wildlife_food_capacity: int = 8
-var food_per_wildlife: int = 2
 var monitor_min_food_nights: int = 1
 var monitor_min_wood_nights: int = 1
-var monitor_task_backlog_warning: int = 40
+var monitor_task_backlog_warning: int = 80
+
+# Noise-based world generation
+var world_noise_frequency: float = 0.08
+var world_noise_forest_threshold: float = 0.30
+var world_noise_rocky_threshold: float = -0.30
+var world_starting_area_radius: int = 5
+var world_cellular_smoothing_passes: int = 2
+
+# Wildlife system
+var deer_spawn_per_day: int = 1
+var deer_max_count: int = 6
+var food_per_deer: int = 3
+var deer_hunt_radius: int = 14
+var wolf_spawn_day: int = 4
+var wolf_spawn_interval_days: int = 3
+var wolf_spawn_count: int = 1
+var wolf_max_count: int = 3
+var wolf_max_age_days: int = 5
+var wolf_threat_radius: int = 8
+var wolf_hunger_disruption: int = 1
+
+# Construction system
+var fence_wolf_damage_reduction: float = 0.10  # multiplicative per fence
+var food_base_capacity: int = 20
+var food_capacity_per_storage: int = 10
+var food_spoilage_divisor: int = 4
 
 func load_from_file(path: String) -> bool:
 	if not FileAccess.file_exists(path):

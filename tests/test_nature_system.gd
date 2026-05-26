@@ -12,9 +12,6 @@ func before_each() -> void:
 	balance.nature_berry_regrowth_days = 1
 	balance.nature_max_trees = 40
 	balance.nature_max_berry_bushes = 40
-	balance.wildlife_food_start = 1
-	balance.wildlife_food_regrowth_per_day = 2
-	balance.wildlife_food_capacity = 4
 	nature = NatureSystemScript.new()
 	nature.setup(balance)
 	wg = WorldGenerator.new()
@@ -52,12 +49,20 @@ func test_regrowth_does_not_overwrite_protected_tiles() -> void:
 	assert_ne(changes[0]["pos"], WorldGenerator.HUT_POS)
 	assert_eq(wg.get_tile(WorldGenerator.HUT_POS.x, WorldGenerator.HUT_POS.y), WorldGenerator.TileType.HUT)
 
-func test_wildlife_food_grows_to_capacity() -> void:
+func test_deer_count_increases_with_update_day() -> void:
+	# deer_max_count defaults to 6; each update_day can spawn up to deer_spawn_per_day
+	balance.deer_max_count = 6
+	balance.deer_spawn_per_day = 2
+	balance.world_seed = 123
+	nature.setup(balance)
+	nature.update_day(1, wg)
 	nature.update_day(2, wg)
 	nature.update_day(3, wg)
-	assert_eq(nature.wildlife_food, 4)
+	assert_gt(nature.wildlife_food, 0, "At least one deer should have spawned after 3 days")
 
-func test_wildlife_food_can_be_consumed() -> void:
-	var consumed: int = nature.consume_wildlife_food(1)
-	assert_eq(consumed, 1)
+func test_remove_animal_decrements_wildlife_food() -> void:
+	var deer := WildlifeAgent.new(99, WildlifeAgent.Kind.DEER, Vector2i(5, 5), 1)
+	nature.animals.append(deer)
+	assert_eq(nature.wildlife_food, 1)
+	nature.remove_animal(99)
 	assert_eq(nature.wildlife_food, 0)

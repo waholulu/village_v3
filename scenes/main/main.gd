@@ -7,6 +7,7 @@ const GRID_HEIGHT = WorldGenerator.HEIGHT
 var _sim: VillageSimulation
 var _tilemap: TileMapController
 var _villager_view: VillagerView
+var _wildlife_view: WildlifeView
 var _save_manager: SaveManager
 
 func _ready() -> void:
@@ -39,6 +40,12 @@ func _ready() -> void:
 	_villager_view = world_scene.get_node("VillagerView")
 	_villager_view.setup(_sim.villagers)
 
+	_wildlife_view = world_scene.get_node("WildlifeView")
+	_wildlife_view.setup_animals([])
+	_sim.wildlife_changed.connect(func(animals: Array[Dictionary]) -> void:
+		_wildlife_view.setup_animals(animals)
+	)
+
 	# Forward Events signals
 	_sim.store.stock_changed.connect(_on_stock_changed)
 	_sim.game_time.night_started.connect(Events.night_started.emit)
@@ -46,14 +53,9 @@ func _ready() -> void:
 
 	var hud = preload("res://scenes/ui/hud.tscn").instantiate()
 	add_child(hud)
+	# hud.setup() wires all label updaters to sim signals internally — no
+	# per-frame polling and no double-update from this caller.
 	hud.setup(_sim)
-	hud.update_resources(balance.starting_wood, balance.starting_food)
-	hud.update_population(_sim.villagers.size(), _sim.population_capacity)
-	hud.update_hunger(_sim.hungry_villagers)
-	hud.update_campfire(_sim.campfire_out_nights)
-	_sim.population_changed.connect(hud.update_population)
-	_sim.hunger_changed.connect(hud.update_hunger)
-	_sim.game_time.night_started.connect(func(_day: int) -> void: hud.update_campfire(_sim.campfire_out_nights))
 
 	var dbg = preload("res://scenes/ui/debug_overlay.tscn").instantiate()
 	add_child(dbg)
