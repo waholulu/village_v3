@@ -44,6 +44,34 @@ offset_right = 790.0
 offset_bottom = 28.0
 text = "Hungry: 0"
 
+[node name="LblSpeed" type="Label" parent="Panel"]
+offset_left = 810.0
+offset_top = 4.0
+offset_right = 900.0
+offset_bottom = 28.0
+text = "Speed: 1x"
+
+[node name="BtnSpeed1" type="Button" parent="Panel"]
+offset_left = 910.0
+offset_top = 2.0
+offset_right = 954.0
+offset_bottom = 30.0
+text = "1x"
+
+[node name="BtnSpeed2" type="Button" parent="Panel"]
+offset_left = 960.0
+offset_top = 2.0
+offset_right = 1004.0
+offset_bottom = 30.0
+text = "2x"
+
+[node name="BtnSpeed4" type="Button" parent="Panel"]
+offset_left = 1010.0
+offset_top = 2.0
+offset_right = 1054.0
+offset_bottom = 30.0
+text = "4x"
+
 [node name="LblCampfire" type="Label" parent="Panel"]
 offset_left = 180.0
 offset_top = 30.0

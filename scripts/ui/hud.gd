@@ -10,6 +10,10 @@ extends CanvasLayer
 @onready var _lbl_nature: Label = $Panel/LblNature
 @onready var _lbl_ai: Label = $Panel/LblAI
 @onready var _lbl_status: Label = $Panel/LblStatus
+@onready var _lbl_speed: Label = $Panel/LblSpeed
+@onready var _btn_speed_1: Button = $Panel/BtnSpeed1
+@onready var _btn_speed_2: Button = $Panel/BtnSpeed2
+@onready var _btn_speed_4: Button = $Panel/BtnSpeed4
 
 var _sim: VillageSimulation
 
@@ -19,6 +23,11 @@ func _ready() -> void:
 	Events.night_started.connect(_on_night_started)
 	Events.game_won.connect(_on_game_won)
 	Events.game_lost.connect(_on_game_lost)
+	Events.speed_changed.connect(_on_speed_changed)
+	_btn_speed_1.pressed.connect(_set_speed.bind(1.0))
+	_btn_speed_2.pressed.connect(_set_speed.bind(2.0))
+	_btn_speed_4.pressed.connect(_set_speed.bind(4.0))
+	_on_speed_changed(Engine.time_scale)
 
 func setup(sim: VillageSimulation) -> void:
 	_sim = sim
@@ -113,3 +122,13 @@ func _on_game_won() -> void:
 func _on_game_lost(reason: String) -> void:
 	_lbl_status.text = "GAME OVER: " + reason
 	_lbl_status.add_theme_color_override("font_color", Color.RED)
+
+func _set_speed(speed: float) -> void:
+	Engine.time_scale = speed
+	Events.speed_changed.emit(speed)
+
+func _on_speed_changed(speed: float) -> void:
+	_lbl_speed.text = "Speed: %dx" % int(speed)
+	_btn_speed_1.disabled = is_equal_approx(speed, 1.0)
+	_btn_speed_2.disabled = is_equal_approx(speed, 2.0)
+	_btn_speed_4.disabled = is_equal_approx(speed, 4.0)

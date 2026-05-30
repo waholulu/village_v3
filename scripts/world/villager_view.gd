@@ -1,7 +1,8 @@
 class_name VillagerView
 extends Node2D
 
-const TILE_SIZE: int = 36
+const DisplayMetrics = preload("res://scripts/world/display_metrics.gd")
+const TILE_SIZE: int = DisplayMetrics.TILE_SIZE
 const VILLAGER_TEXTURE_PATHS: Array[String] = [
 	"res://assets/villagers/villager_yellow.png",
 	"res://assets/villagers/villager_blue.png",
@@ -23,7 +24,7 @@ func _process(_delta: float) -> void:
 	_sync_sprites()
 	for i in range(_villagers.size()):
 		var v = _villagers[i]
-		_sprites[i].position = Vector2(v.tile_position) * TILE_SIZE + Vector2(6, 6)
+		_sprites[i].position = Vector2(v.tile_position) * TILE_SIZE
 
 func _sync_sprites() -> void:
 	# Shrink first so a smaller villager list (after F9 load) doesn't leave
@@ -49,6 +50,6 @@ func _get_villager_texture(index: int) -> Texture2D:
 	return _textures[index % _textures.size()]
 
 func _make_fallback_texture() -> Texture2D:
-	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	var image := Image.create(TILE_SIZE, TILE_SIZE, false, Image.FORMAT_RGBA8)
 	image.fill(Color(1.0, 0.9, 0.2, 1.0))
 	return ImageTexture.create_from_image(image)

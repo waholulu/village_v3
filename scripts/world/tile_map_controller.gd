@@ -1,8 +1,9 @@
 class_name TileMapController
 extends TileMapLayer
 
-const TILE_SIZE: int = 36
-const TILE_SHEET_PATH := "res://assets/tiles/campfire_tilesheet_36.png"
+const DisplayMetrics = preload("res://scripts/world/display_metrics.gd")
+const TILE_SIZE: int = DisplayMetrics.TILE_SIZE
+const TILE_SHEET_PATH := "res://assets/tiles/campfire_tilesheet_32.png"
 const TILE_COLORS: Array[Color] = [
 	Color(0.3, 0.65, 0.2),   # 0 GRASS
 	Color(0.1, 0.35, 0.1),   # 1 TREE

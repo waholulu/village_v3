@@ -1,16 +1,22 @@
 extends Node2D
 
-const TILE_SIZE = 36
-const GRID_WIDTH = WorldGenerator.WIDTH
-const GRID_HEIGHT = WorldGenerator.HEIGHT
+const DisplayMetrics = preload("res://scripts/world/display_metrics.gd")
+const TILE_SIZE = DisplayMetrics.TILE_SIZE
+const HUD_HEIGHT := 78.0
+const CAMERA_PAN_SPEED := 520.0
+var GRID_WIDTH: int = WorldGenerator.WIDTH
+var GRID_HEIGHT: int = WorldGenerator.HEIGHT
 
 var _sim: VillageSimulation
 var _tilemap: TileMapController
 var _villager_view: VillagerView
 var _wildlife_view: WildlifeView
 var _save_manager: SaveManager
+var _camera: Camera2D
+var _dragging_camera := false
 
 func _ready() -> void:
+	Engine.time_scale = 1.0
 	var balance = BalanceData.new()
 	balance.load_from_file("res://data/balance.json")
 
@@ -22,7 +28,7 @@ func _ready() -> void:
 
 	var world_scene = preload("res://scenes/world/world.tscn").instantiate()
 	# Offset world to leave room for HUD at top
-	world_scene.position = Vector2(0, 60)
+	world_scene.position = Vector2(0, HUD_HEIGHT)
 	add_child(world_scene)
 
 	_tilemap = world_scene.get_node("TileMapController")
@@ -62,6 +68,7 @@ func _ready() -> void:
 	dbg.setup(_sim)
 
 	_save_manager = SaveManager.new()
+	_setup_camera()
 
 func _on_tile_changed(pos: Vector2i, new_type: int) -> void:
 	_tilemap.refresh_tile(pos, new_type)
@@ -80,7 +87,69 @@ func _on_game_lost(reason: String) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
+			KEY_1:
+				_set_time_scale(1.0)
+			KEY_2:
+				_set_time_scale(2.0)
+			KEY_3:
+				_set_time_scale(4.0)
 			KEY_F5:
 				_save_manager.save(_sim)
 			KEY_F9:
 				_save_manager.load_into(_sim)
+	elif event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_MIDDLE:
+			_dragging_camera = event.pressed
+	elif event is InputEventMouseMotion and _dragging_camera:
+		_move_camera(-event.relative)
+
+func _process(delta: float) -> void:
+	if _camera == null:
+		return
+	var direction := Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		direction.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		direction.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		direction.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		direction.y += 1.0
+	if direction != Vector2.ZERO:
+		var real_delta: float = delta / maxf(Engine.time_scale, 0.001)
+		_move_camera(direction.normalized() * CAMERA_PAN_SPEED * real_delta)
+
+func _setup_camera() -> void:
+	_camera = Camera2D.new()
+	_camera.name = "WorldCamera"
+	_camera.enabled = true
+	add_child(_camera)
+	_camera.make_current()
+	var campfire_center := Vector2(WorldGenerator.CAMPFIRE_POS) * TILE_SIZE + Vector2(TILE_SIZE, TILE_SIZE) * 0.5
+	_camera.global_position = campfire_center + Vector2(0, HUD_HEIGHT)
+	_clamp_camera()
+
+func _move_camera(offset: Vector2) -> void:
+	_camera.global_position += offset
+	_clamp_camera()
+
+func _clamp_camera() -> void:
+	var viewport_size := get_viewport_rect().size
+	var half_view := viewport_size * 0.5
+	var world_size := Vector2(WorldGenerator.WIDTH, WorldGenerator.HEIGHT) * TILE_SIZE
+	var min_pos := Vector2(half_view.x, HUD_HEIGHT + half_view.y)
+	var max_pos := Vector2(world_size.x - half_view.x, HUD_HEIGHT + world_size.y - half_view.y)
+	if max_pos.x < min_pos.x:
+		min_pos.x = world_size.x * 0.5
+		max_pos.x = min_pos.x
+	if max_pos.y < min_pos.y:
+		min_pos.y = HUD_HEIGHT + world_size.y * 0.5
+		max_pos.y = min_pos.y
+	_camera.global_position = Vector2(
+		clampf(_camera.global_position.x, min_pos.x, max_pos.x),
+		clampf(_camera.global_position.y, min_pos.y, max_pos.y)
+	)
+
+func _set_time_scale(value: float) -> void:
+	Engine.time_scale = value
+	Events.speed_changed.emit(value)

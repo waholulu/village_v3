@@ -61,6 +61,9 @@ land with a focused test — see Phase A/B/C/D regression tests
 - F5 — save to `user://save.json`
 - F9 — load from `user://save.json` (resets in-flight tasks; villagers
   return to IDLE; resource HUD refreshes via signal)
+- WASD / arrow keys — pan the map camera
+- Right mouse drag or middle mouse drag — pan the map camera
+- HUD speed buttons or number keys 1/2/3 — set simulation speed to 1x/2x/4x
 
 ## Directory map
 

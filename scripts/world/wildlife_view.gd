@@ -1,7 +1,10 @@
 class_name WildlifeView
 extends Node2D
 
-const TILE_SIZE: int = 36
+const DisplayMetrics = preload("res://scripts/world/display_metrics.gd")
+const TILE_SIZE: int = DisplayMetrics.TILE_SIZE
+const DEER_TEXTURE_PATH := "res://assets/wildlife/deer.png"
+const WOLF_TEXTURE_PATH := "res://assets/wildlife/wolf.png"
 
 var _animals: Array[Dictionary] = []
 var _sprites: Array[Sprite2D] = []
@@ -17,7 +20,7 @@ func _process(_delta: float) -> void:
 		if i >= _sprites.size():
 			break
 		var a: Dictionary = _animals[i]
-		_sprites[i].position = Vector2(a["x"], a["y"]) * TILE_SIZE + Vector2(8, 8)
+		_sprites[i].position = Vector2(a["x"], a["y"]) * TILE_SIZE
 
 func _sync_sprites() -> void:
 	while _sprites.size() > _animals.size():
@@ -38,13 +41,20 @@ func _sync_sprites() -> void:
 func _get_texture(kind: int) -> Texture2D:
 	if kind == WildlifeAgent.Kind.WOLF:
 		if _wolf_texture == null:
-			_wolf_texture = _make_color_texture(Color(0.5, 0.5, 0.55, 1.0))
+			_wolf_texture = _load_square_texture(WOLF_TEXTURE_PATH, Color(0.5, 0.5, 0.55, 1.0))
 		return _wolf_texture
 	if _deer_texture == null:
-		_deer_texture = _make_color_texture(Color(0.76, 0.6, 0.42, 1.0))
+		_deer_texture = _load_square_texture(DEER_TEXTURE_PATH, Color(0.76, 0.6, 0.42, 1.0))
 	return _deer_texture
 
+func _load_square_texture(path: String, fallback_color: Color) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var texture := load(path) as Texture2D
+		if texture != null and texture.get_width() == TILE_SIZE and texture.get_height() == TILE_SIZE:
+			return texture
+	return _make_color_texture(fallback_color)
+
 func _make_color_texture(color: Color) -> Texture2D:
-	var image := Image.create(20, 20, false, Image.FORMAT_RGBA8)
+	var image := Image.create(TILE_SIZE, TILE_SIZE, false, Image.FORMAT_RGBA8)
 	image.fill(color)
 	return ImageTexture.create_from_image(image)
