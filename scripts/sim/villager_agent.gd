@@ -6,6 +6,7 @@ enum Status { HEALTHY, TIRED, INJURED, SICK, DEAD }
 
 var id: int
 var name: String
+var job: String = "farmer"
 var tile_position: Vector2i
 var state: State = State.IDLE
 var status: Status = Status.HEALTHY
@@ -15,12 +16,13 @@ var hunger: int = 0
 var _path: Array[Vector2i] = []
 var _move_timer: float = 0.0
 
-func _init(p_id: int, p_name: String, start_pos: Vector2i) -> void:
+func _init(p_id: int, p_name: String, start_pos: Vector2i, p_job: String = "farmer") -> void:
 	id = p_id
 	name = p_name
+	job = p_job
 	tile_position = start_pos
 
-func pick_best_task(board: TaskBoard, store: ResourceStore, gt: GameTime, scorer: UtilityScorer) -> Task:
+func pick_best_task(board: TaskBoard, store: ResourceStore, gt: GameTime, scorer: UtilityScorer, policy: String = "") -> Task:
 	if not can_work():
 		return null
 	var open_tasks = board.get_open_tasks()
@@ -29,7 +31,7 @@ func pick_best_task(board: TaskBoard, store: ResourceStore, gt: GameTime, scorer
 	var best_task: Task = null
 	var best_score: float = -INF
 	for task in open_tasks:
-		var s: float = scorer.score_task(self, task, store, gt)
+		var s: float = scorer.score_task(self, task, store, gt, policy)
 		if s > best_score:
 			best_score = s
 			best_task = task
@@ -55,8 +57,11 @@ func get_state_name() -> String:
 func get_status_name() -> String:
 	return Status.keys()[status].to_lower()
 
+func get_job_name() -> String:
+	return job
+
 func can_work() -> bool:
-	return status != Status.DEAD
+	return status != Status.INJURED and status != Status.SICK and status != Status.DEAD
 
 func tick_movement(delta: float, path: Array[Vector2i], move_interval: float) -> bool:
 	if not can_work():

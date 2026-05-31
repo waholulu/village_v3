@@ -6,6 +6,8 @@ const NatureSystemScript = preload("res://scripts/sim/nature_system.gd")
 const SimulationSnapshotScript = preload("res://scripts/sim/simulation_snapshot.gd")
 const NightResolutionScript = preload("res://scripts/sim/night_resolution.gd")
 const WolfThreatSystemScript = preload("res://scripts/sim/wolf_threat_system.gd")
+const PolicyResolverScript = preload("res://scripts/sim/policy_resolver.gd")
+const TaskResolutionScript = preload("res://scripts/sim/task_resolution.gd")
 
 signal game_won()
 signal game_lost(reason: String)
@@ -33,6 +35,7 @@ var population_capacity: int = 3
 var zero_food_days: int = 0
 var zero_morale_days: int = 0
 var zero_security_days: int = 0
+var active_policy: String = PolicyDefs.default_policy()
 var _fence_count: int = 0
 var _watchtower_count: int = 0
 var _storage_count: int = 0
@@ -152,6 +155,7 @@ func _reset_state() -> void:
 	zero_food_days = 0
 	zero_morale_days = 0
 	zero_security_days = 0
+	active_policy = PolicyDefs.default_policy()
 	_fence_count = 0
 	_watchtower_count = 0
 	_storage_count = 0
@@ -212,6 +216,7 @@ func _apply_wolf_disruption() -> void:
 	WolfThreatSystemScript.apply_disruption(self)
 
 func _on_day_started(_day: int) -> void:
+	_resolve_policy_daily_resources()
 	_resolve_strategic_daily_state()
 	# Win when the player survives through the final MVP day.
 	if _day > get_days_to_win():
@@ -244,10 +249,36 @@ func get_visible_population() -> int:
 func has_population_mismatch() -> bool:
 	return get_strategic_population() != get_visible_population()
 
+func can_change_policy(day: int = -1) -> bool:
+	var check_day: int = day
+	if check_day < 0 and game_time != null:
+		check_day = game_time.day
+	return PolicyDefs.can_change_on_day(check_day)
+
+func set_policy(policy: String) -> bool:
+	if not PolicyDefs.is_valid(policy):
+		return false
+	if not can_change_policy():
+		return false
+	active_policy = policy
+	return true
+
 func apply_strategic_resource_delta(resource_name: String, delta: int) -> void:
 	store.add_resource(resource_name, delta)
 	if resource_name == "population" and store.get_resource("population") <= 0:
 		game_lost.emit("Population reached 0")
+
+func _resolve_policy_daily_resources() -> Dictionary:
+	return PolicyResolverScript.resolve_daily(self)
+
+func _modified_output_amount(v: VillagerAgent, output_type: String, base: int) -> int:
+	return PolicyResolverScript.modified_output_amount(self, v, output_type, base)
+
+func _find_recoverable_villager() -> VillagerAgent:
+	return PolicyResolverScript.find_recoverable_villager(self)
+
+func _roll_percent(tag: String, villager_id: int) -> int:
+	return PolicyResolverScript.roll_percent(self, tag, villager_id)
 
 func _resolve_strategic_daily_state() -> void:
 	if store == null or _balance == null:
@@ -402,6 +433,10 @@ func _generate_tasks() -> void:
 	if wood < _balance.wood_low_threshold:
 		for tree_pos in world_gen.get_tiles_of_type(WorldGenerator.TileType.TREE):
 			_try_create_resource_task("chop_tree", tree_pos)
+	if active_policy == PolicyDefs.DEFENSE_FIRST and store.get_resource("security") < 60:
+		_try_create_walkable_task("guard_watch", WorldGenerator.CAMPFIRE_POS)
+	if active_policy == PolicyDefs.REST_FIRST and _find_recoverable_villager() != null:
+		_try_create_walkable_task("tend_villager", WorldGenerator.HUT_POS)
 	# build_* tasks are created by ConstructionPlanner in _on_day_started.
 
 func _try_create_resource_task(task_type: String, target_tile: Vector2i) -> void:
@@ -414,6 +449,15 @@ func _try_create_resource_task(task_type: String, target_tile: Vector2i) -> void
 	var task = board.create_task(task_type, target_tile, game_time.tick)
 	task.approach_tile = adj
 
+func _try_create_walkable_task(task_type: String, target_tile: Vector2i) -> void:
+	if board.has_active_task_of_type(task_type):
+		return
+	if world_gen == null or not world_gen.is_in_bounds(target_tile):
+		return
+	if not world_gen.is_walkable(target_tile.x, target_tile.y):
+		return
+	board.create_task(task_type, target_tile, game_time.tick)
+
 func _tick_villagers(delta: float) -> void:
 	for v in villagers:
 		if not v.can_work():
@@ -422,9 +466,9 @@ func _tick_villagers(delta: float) -> void:
 				v.clear_task()
 			continue
 		if v.state == VillagerAgent.State.IDLE:
-			var task: Task = v.pick_best_task(board, store, game_time, scorer)
+			var task: Task = v.pick_best_task(board, store, game_time, scorer, active_policy)
 			if task != null:
-				var score: float = scorer.score_task(v, task, store, game_time)
+				var score: float = scorer.score_task(v, task, store, game_time, active_policy)
 				board.claim_task(task.id, v.id)
 				v.set_task(task)
 				_log({"event": "task_claimed", "villager": v.name, "task": task.type,
@@ -453,89 +497,7 @@ func _tick_villagers(delta: float) -> void:
 		run_monitor_check()
 
 func _execute_task_at_target(v: VillagerAgent) -> void:
-	var task = board.get_task(v.current_task_id)
-	if task == null:
-		v.clear_task()
-		return
-	# ORDER MATTERS: mutate the world (tile + pathfinding) FIRST, emit tile_changed,
-	# THEN bump the resource counter. Listeners reading world_gen on tile_changed
-	# must see the new tile, not the old one.
-	match task.type:
-		"chop_tree":
-			if nature:
-				nature.record_harvest(WorldGenerator.TileType.TREE, task.target_tile, game_time.day)
-			world_gen.set_tile(task.target_tile.x, task.target_tile.y, WorldGenerator.TileType.GRASS)
-			if pathfinding:
-				pathfinding.set_point_walkable(task.target_tile, true)
-			tile_changed.emit(task.target_tile, WorldGenerator.TileType.GRASS)
-			store.add_resource("wood", _balance.wood_per_tree)
-			_log({"event": "task_completed", "villager": v.name, "task": "chop_tree",
-				"wood_gained": _balance.wood_per_tree, "wood_total": store.get_resource("wood")})
-		"gather_food":
-			if nature:
-				nature.record_harvest(WorldGenerator.TileType.BERRY_BUSH, task.target_tile, game_time.day)
-			world_gen.set_tile(task.target_tile.x, task.target_tile.y, WorldGenerator.TileType.GRASS)
-			if pathfinding:
-				pathfinding.set_point_walkable(task.target_tile, true)
-			tile_changed.emit(task.target_tile, WorldGenerator.TileType.GRASS)
-			store.add_resource("fresh_food", _balance.food_per_bush)
-			_log({"event": "task_completed", "villager": v.name, "task": "gather_food",
-				"food_gained": _balance.food_per_bush, "fresh_food_total": store.get_resource("fresh_food")})
-		"hunt_deer":
-			if nature:
-				var deer: WildlifeAgent = nature.find_animal_at(task.target_tile, WildlifeAgent.Kind.DEER)
-				if deer != null:
-					nature.remove_animal(deer.id)
-					store.add_resource("fresh_food", _balance.food_per_deer)
-					wildlife_changed.emit(nature.get_animals_as_dicts())
-					_log({"event": "deer_hunted", "villager": v.name, "deer_id": deer.id,
-						"pos": [task.target_tile.x, task.target_tile.y],
-						"food_gained": _balance.food_per_deer, "fresh_food_total": store.get_resource("fresh_food")})
-				else:
-					_log({"event": "deer_escaped", "villager": v.name,
-						"pos": [task.target_tile.x, task.target_tile.y]})
-		"build_house", "build_fence", "build_watchtower", "build_storage":
-			if not _execute_build(v, task):
-				return
-	board.complete_task(task.id)
-	v.clear_task()
-
-func _execute_build(v: VillagerAgent, task: Task) -> bool:
-	# Returns false if the task was cancelled (caller must `return` to skip
-	# the trailing complete_task call). Returns true on successful build.
-	var key: String = task.type.replace("build_", "")
-	var def: Dictionary = BuildingDefs.BUILDINGS[key]
-	if not store.has_enough("wood", def.wood_cost):
-		board.cancel_task(task.id)
-		v.clear_task()
-		_log({"event": "task_cancelled", "villager": v.name, "task": task.type,
-			"reason": "insufficient_wood"})
-		return false
-	store.consume_resource("wood", def.wood_cost)
-	world_gen.set_tile(task.target_tile.x, task.target_tile.y, def.tile_type)
-	if pathfinding:
-		# FENCE is walkable per design; all building tiles are walkable.
-		pathfinding.set_point_walkable(task.target_tile, true)
-	_apply_building_effect(key)
-	tile_changed.emit(task.target_tile, def.tile_type)
-	population_changed.emit(villagers.size(), population_capacity)
-	_log({"event": "built", "villager": v.name, "building": key,
-		"pos": [task.target_tile.x, task.target_tile.y], "wood_spent": def.wood_cost})
-	# NOTE: don't call run_monitor_check() here — villager is still in MOVING
-	# state with an emptied path until the caller clears it. _tick_villagers
-	# calls run_monitor_check() at end of loop instead.
-	return true
-
-func _apply_building_effect(key: String) -> void:
-	match key:
-		"house":
-			population_capacity += _balance.population_capacity_per_house
-		"fence":
-			_fence_count += 1
-		"watchtower":
-			_watchtower_count += 1
-		"storage":
-			_storage_count += 1
+	TaskResolutionScript.execute_task_at_target(self, v)
 
 func _grow_population_if_possible() -> void:
 	if not _balance.population_growth_enabled:
@@ -561,7 +523,7 @@ func _add_villager() -> VillagerAgent:
 	var idx := _next_villager_id - 1
 	var name: String = names[idx] if idx < names.size() else "Villager %d" % _next_villager_id
 	var pos: Vector2i = find_valid_spawn_tile(idx)
-	var villager := VillagerAgent.new(_next_villager_id, name, pos)
+	var villager := VillagerAgent.new(_next_villager_id, name, pos, JobDefs.default_for_index(idx))
 	_next_villager_id += 1
 	villagers.append(villager)
 	population_changed.emit(villagers.size(), population_capacity)

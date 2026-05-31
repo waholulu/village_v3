@@ -9,6 +9,9 @@
   "starting_morale": 60,
   "zero_resource_loss_days": 3,
   "days_per_season": 15,
+  "strategic_food_consumed_per_day": 1,
+  "hunter_injury_chance_percent": 10,
+  "herbalist_recovery_chance_percent": 60,
 
   "wood_per_tree": 3,
   "food_per_bush": 2,

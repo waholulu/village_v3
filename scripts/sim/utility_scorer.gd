@@ -1,7 +1,7 @@
 class_name UtilityScorer
 extends RefCounted
 
-func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, _gt: GameTime) -> float:
+func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, _gt: GameTime, policy: String = "") -> float:
 	# `_gt` retained for caller compatibility (and future time-of-day modifiers)
 	# but currently unused — all scoring is need + distance, day/night
 	# behavioral switches are encoded as scorer arms not as gt.phase reads.
@@ -27,6 +27,13 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, _gt: 
 			score += 15.0
 		"build_storage":
 			score += 12.0
+		"guard_watch":
+			score += maxf(0.0, 60.0 - float(store.get_resource("security"))) * 1.0
+		"tend_villager":
+			score += 18.0
 
 	score -= dist * 0.5
+	score *= JobDefs.task_score_multiplier(villager.job, task.type)
+	if policy != "":
+		score *= PolicyDefs.task_score_multiplier(policy, task.type)
 	return score

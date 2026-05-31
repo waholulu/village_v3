@@ -39,8 +39,44 @@ For higher-level project framing and the multi-phase outline, see
   it must be removed before MVP lock.
 - Villager agents now expose MVP status values: `healthy`, `tired`,
   `injured`, `sick`, and `dead`. New villagers start `healthy`.
-- `dead` villagers remain in the villager list but cannot claim, receive, or
-  execute work tasks.
+- `injured`, `sick`, and `dead` villagers cannot claim, receive, execute, or
+  contribute work. `tired` villagers can work at reduced strategic output.
+- `dead` villagers remain in the villager list.
+
+## Policies And Jobs
+
+- Phase 2 policy/job bridge is now partially implemented. The active policy
+  defaults to `food_first`.
+- Policy changes are accepted only on days 1, 8, 15, 22, 29, 36, 43, 50,
+  and 57. Invalid policy ids are rejected, and non-boundary attempts keep the
+  previous policy.
+- Implemented policies:
+  - `food_first`: boosts food output and food task scores.
+  - `wood_first`: boosts wood output and chop-tree task scores.
+  - `defense_first`: boosts security output and guard / defense task scores.
+  - `rest_first`: boosts recovery output and tend-villager task scores.
+  - `explore_forest`: boosts hunter / forest food and wood output.
+- Visible villagers receive deterministic MVP jobs in this order, repeating:
+  farmer, hunter, woodcutter, guard, herbalist.
+- Job effects currently apply to strategic daily output and task scoring:
+  - Farmer: produces food and prefers `gather_food`.
+  - Hunter: produces food, prefers `hunt_deer`, and can become injured from a
+    deterministic daily risk roll.
+  - Woodcutter: produces wood and prefers `chop_tree`.
+  - Guard: produces security and prefers guard / defense tasks.
+  - Herbalist: can recover one injured or sick villager with a deterministic
+    daily roll.
+- Each day start resolves the Phase 2 strategic bridge before loss-streak
+  checks: consume `strategic_food_consumed_per_day` from strategic `food`,
+  then apply visible-villager job output modified by status and policy.
+- The daily bridge uses deterministic hash rolls based on `world_seed`, day,
+  villager id, and roll tag. It does not use global random state.
+- Resource tasks now also update the matching strategic resource:
+  `gather_food` and `hunt_deer` add strategic `food`, and `chop_tree` adds
+  strategic `wood`.
+- This bridge is still a migration layer: legacy hunger and fresh/stored food
+  remain active until Phase 4 save/UI migration removes or fully projects
+  them.
 
 ## World
 
@@ -83,6 +119,10 @@ balance):
 - `chop_tree`: created per TREE when `wood < wood_low_threshold`.
 - `hunt_deer`: created when a deer is within `deer_hunt_radius` of HUT,
   regardless of food level. Cancelled at every day_start (deer move daily).
+- `guard_watch`: created by `defense_first` while security is below 60.
+  Completed guard work adds strategic security.
+- `tend_villager`: created by `rest_first` when any villager is injured or
+  sick. Completed herbalist work can recover one villager and add morale.
 
 **No more `return_home` or `refuel_campfire` tasks.** Those were
 placeholders removed in the Phase C cleanup. Codex / Claude must NOT
@@ -209,8 +249,9 @@ In `_on_night_started`:
 ## Save / load
 
 - `SaveManager.save()` writes the full current grid as `tiles`, plus
-  legacy food fields, grouped strategic resources, zero-resource streaks,
-  day/phase, villager positions + hunger + names + status, and
+  legacy food fields, grouped strategic resources, active policy,
+  zero-resource streaks, day/phase, villager positions + hunger + names +
+  job + status, and
   `_wolf_threat_count`. **No tasks, no buildings list, no derived
   building counters** — all reconstructed from the grid.
 - `load_into()`:
@@ -218,13 +259,14 @@ In `_on_night_started`:
     `store.setup_strategic()`; both emit `stock_changed` so HUD refreshes.
   - Restores `zero_food_days`, `zero_morale_days`, and
     `zero_security_days`.
+  - Restores active policy.
   - Restores grid via `world_gen.set_tile()` for each cell.
   - Recomputes `_fence_count` / `_watchtower_count` / `_storage_count`
     from tile counts.
   - Drops the task board (`sim.board = TaskBoard.new()`); tasks
     regenerate next tick.
   - Resets every villager to IDLE with empty path; keeps position +
-    hunger + name + id + status.
+    hunger + name + id + job + status.
   - Rebuilds pathfinding from scratch (`pf.setup(wg)`).
   - Emits `tile_changed` for every cell so renderers redraw.
 - No schema version field. Format is still mutating; pre-Phase-B saves

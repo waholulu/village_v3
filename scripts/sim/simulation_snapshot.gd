@@ -26,6 +26,8 @@ static func build(sim: VillageSimulation) -> Dictionary:
 		"phase": sim.game_time.get_phase_name(),
 		"tick": sim.game_time.tick,
 		"time_left": sim.game_time.get_time_left(),
+		"active_policy": sim.active_policy,
+		"active_policy_name": PolicyDefs.get_display_name(sim.active_policy),
 		"wood": sim.store.get_resource("wood"),
 		"strategic_food": sim.store.get_resource("food"),
 		"security": sim.store.get_resource("security"),

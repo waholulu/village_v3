@@ -34,6 +34,7 @@ func _build_debug_text() -> String:
 	lines.append("=== DEBUG (F3) ===")
 	lines.append("Day: %d / %d  %s" % [snapshot["day"], snapshot["days_to_win"], snapshot.get("season", "Spring")])
 	lines.append("Phase: %s" % snapshot["phase"])
+	lines.append("Policy: %s" % snapshot["active_policy_name"])
 	lines.append("Tick: %d" % snapshot["tick"])
 	lines.append("Time left: %.1fs" % snapshot["time_left"])
 	lines.append("")
@@ -91,6 +92,7 @@ func _build_debug_text() -> String:
 			if t:
 				task_info = "%s@(%d,%d)" % [t.type, t.target_tile.x, t.target_tile.y]
 		lines.append("%s: %s" % [v.name, v.get_state_name()])
+		lines.append("  job: %s" % JobDefs.get_display_name(v.job))
 		lines.append("  status: %s" % v.get_status_name())
 		lines.append("  task: %s" % task_info)
 		lines.append("  pos: (%d,%d)" % [v.tile_position.x, v.tile_position.y])
