@@ -1,10 +1,16 @@
 class_name BalanceData
 extends RefCounted
 
-var starting_wood: int = 10
-var starting_food: int = 8
+var starting_wood: int = 25
+var starting_fresh_food: int = 4
+var starting_stored_food: int = 8
 var villager_count: int = 3
-var days_to_win: int = 7
+var starting_population: int = 10
+var starting_food: int = 40
+var starting_security: int = 50
+var starting_morale: int = 60
+var zero_resource_loss_days: int = 3
+var days_per_season: int = 15
 var wood_per_tree: int = 3
 var food_per_bush: int = 2
 var food_consumed_per_villager_per_night: int = 1
@@ -20,6 +26,8 @@ var wood_surplus_threshold: int = 12
 var day_duration_seconds: float = 10.0
 var night_duration_seconds: float = 5.0
 var max_campfire_out_nights: int = 2
+var winter_wood_consumption_multiplier: float = 1.5
+var fresh_food_spoilage_per_night: int = 1
 var villager_move_interval: float = 0.5
 var starting_population_capacity: int = 3
 var population_growth_enabled: bool = false
@@ -28,9 +36,18 @@ var population_capacity_per_house: int = 2
 var food_required_for_new_villager: int = 2
 var max_hunger: int = 3
 var world_seed: int = 4312
-var world_tree_count: int = 32
-var world_berry_bush_count: int = 18
-var world_blocked_count: int = 18
+# v3.1 default map: 60×40 (was 40×27 in v3.0). WorldGenerator reads these at
+# the start of generate_from_balance() and applies them via static vars so
+# existing WorldGenerator.WIDTH / HUT_POS call sites keep working.
+var world_width: int = 60
+var world_height: int = 40
+var hut_pos_x: int = 15
+var hut_pos_y: int = 18
+var campfire_pos_x: int = 17
+var campfire_pos_y: int = 19
+var world_tree_count: int = 60
+var world_berry_bush_count: int = 32
+var world_blocked_count: int = 32
 var nature_tree_regrowth_days: int = 2
 var nature_berry_regrowth_days: int = 1
 var nature_max_trees: int = 36
@@ -61,9 +78,6 @@ var wolf_hunger_disruption: int = 1
 
 # Construction system
 var fence_wolf_damage_reduction: float = 0.10  # multiplicative per fence
-var food_base_capacity: int = 20
-var food_capacity_per_storage: int = 10
-var food_spoilage_divisor: int = 4
 
 func load_from_file(path: String) -> bool:
 	if not FileAccess.file_exists(path):

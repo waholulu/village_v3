@@ -1,10 +1,15 @@
 class_name WorldGenerator
 extends RefCounted
 
-const WIDTH: int = 40
-const HEIGHT: int = 27
-const HUT_POS: Vector2i = Vector2i(4, 5)
-const CAMPFIRE_POS: Vector2i = Vector2i(6, 6)
+# v3.1: map dimensions and key positions are balance-driven (default 60×40,
+# HUT (15,18), CAMPFIRE (17,19)). Stored as static vars so existing call
+# sites (WorldGenerator.WIDTH, .HUT_POS, etc.) keep working unchanged.
+# generate_from_balance() updates these from balance keys before any tile
+# placement. Tests using generate_fixed() get the defaults.
+static var WIDTH: int = 60
+static var HEIGHT: int = 40
+static var HUT_POS: Vector2i = Vector2i(15, 18)
+static var CAMPFIRE_POS: Vector2i = Vector2i(17, 19)
 
 enum TileType { GRASS, TREE, BERRY_BUSH, HUT, CAMPFIRE, BLOCKED, BUILD_SITE, HOUSE, FENCE, WATCHTOWER, STORAGE }
 
@@ -13,15 +18,19 @@ var grid: Array = []
 # Lookups go from O(W*H) scan to O(1); iteration callers get a duplicate so
 # the cache cannot be mutated externally (e.g. _cellular_smooth_blocked sorts).
 var _tile_index: Dictionary = {}
+# Default build_sites for a 60×40 map with HUT at (15,18). Spread within
+# Chebyshev radius ~12 of HUT so the planner has variety without dragging
+# villagers across the entire map. v3.1 may add separate FIELD build_sites
+# in Phase 2; those will live elsewhere.
 var build_sites: Array[Vector2i] = [
-	Vector2i(8, 5),
-	Vector2i(11, 6),
-	Vector2i(14, 8),
-	Vector2i(7, 11),
-	Vector2i(21, 8),
-	Vector2i(28, 13),
-	Vector2i(34, 20),
-	Vector2i(18, 22),
+	Vector2i(20, 18),
+	Vector2i(22, 22),
+	Vector2i(13, 22),
+	Vector2i(11, 16),
+	Vector2i(18, 12),
+	Vector2i(26, 16),
+	Vector2i(8, 25),
+	Vector2i(28, 26),
 ]
 var last_seed: int = 4312
 
@@ -46,6 +55,13 @@ func generate_fixed(seed: int = 4312, tree_count: int = 32, berry_count: int = 1
 	_ensure_reachable_resources()
 
 func generate_from_balance(balance: BalanceData) -> void:
+	# Apply balance-driven map dimensions before any tile placement. Static vars
+	# so downstream tests reading WorldGenerator.WIDTH / HUT_POS see the same
+	# values used during generation.
+	WIDTH = balance.world_width
+	HEIGHT = balance.world_height
+	HUT_POS = Vector2i(balance.hut_pos_x, balance.hut_pos_y)
+	CAMPFIRE_POS = Vector2i(balance.campfire_pos_x, balance.campfire_pos_y)
 	last_seed = balance.world_seed
 	_fill_grass()
 

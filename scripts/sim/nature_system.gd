@@ -32,16 +32,21 @@ func record_harvest(tile_type: int, pos: Vector2i, day: int) -> void:
 		"day": day
 	})
 
-func update_day(day: int, world_gen: WorldGenerator, blocked_positions: Array[Vector2i] = []) -> Array[Dictionary]:
+func update_day(day: int, world_gen: WorldGenerator, blocked_positions: Array[Vector2i] = [], season: int = 0) -> Array[Dictionary]:
+	# season: 0=Spring 1=Summer 2=Autumn 3=Winter (GameTime.Season int values)
 	_last_update_day = day
 	_age_and_despawn()
 	if world_gen != null:
-		_spawn_animals(day, world_gen)
-		_move_animals(day, world_gen)
+		_spawn_animals(day, world_gen)  # deer spawn year-round; they just don't move in winter
+		_move_animals(day, world_gen, season)
 
 	var blocked: Dictionary = {}
 	for p in blocked_positions:
 		blocked[p] = true
+
+	# No regrowth in winter — plants lie dormant until spring.
+	if season == 3:
+		return []
 
 	var changes: Array[Dictionary] = []
 	var remaining: Array[Dictionary] = []
@@ -218,10 +223,11 @@ func _spawn_animals(day: int, world_gen: WorldGenerator) -> void:
 				spawned_wolves += 1
 				break
 
-func _move_animals(day: int, world_gen: WorldGenerator) -> void:
+func _move_animals(day: int, world_gen: WorldGenerator, season: int = 0) -> void:
 	for a in animals:
 		if a.kind == WildlifeAgent.Kind.DEER:
-			_move_deer(a, day, world_gen)
+			if season != 3:  # deer stay put in winter
+				_move_deer(a, day, world_gen)
 		elif a.kind == WildlifeAgent.Kind.WOLF:
 			_move_wolf(a, world_gen)
 

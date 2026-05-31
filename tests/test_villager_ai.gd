@@ -2,10 +2,10 @@ extends GutTest
 
 func _make_context(wood: int, food: int, phase_night: bool = false) -> Dictionary:
 	var store = ResourceStore.new()
-	store.setup(wood, food)
+	store.setup(wood, food, 0)
 	var board = TaskBoard.new()
-	var gt = add_child_autoqfree(GameTime.new())
-	gt.setup(10.0, 5.0, 7)
+	var gt: GameTime = add_child_autoqfree(GameTime.new())
+	gt.setup(10.0, 5.0, 5)
 	if phase_night:
 		gt._advance_phase()
 	var scorer = UtilityScorer.new()
@@ -35,9 +35,18 @@ func test_returns_null_when_no_open_tasks() -> void:
 	var chosen = villager.pick_best_task(ctx.board, ctx.store, ctx.gt, ctx.scorer)
 	assert_null(chosen)
 
+func test_dead_villager_cannot_pick_task() -> void:
+	var ctx = _make_context(10, 3)
+	ctx.board.create_task("gather_food", Vector2i(3, 3), 0)
+	var villager = VillagerAgent.new(1, "Dana", Vector2i(6, 6))
+	villager.status = VillagerAgent.Status.DEAD
+	var chosen = villager.pick_best_task(ctx.board, ctx.store, ctx.gt, ctx.scorer)
+	assert_null(chosen)
+
 func test_starts_idle() -> void:
 	var villager = VillagerAgent.new(1, "Eve", Vector2i(5, 5))
 	assert_eq(villager.state, VillagerAgent.State.IDLE)
+	assert_eq(villager.status, VillagerAgent.Status.HEALTHY)
 
 func test_set_task_changes_state_to_moving() -> void:
 	var villager = VillagerAgent.new(1, "Frank", Vector2i(5, 5))
@@ -47,3 +56,12 @@ func test_set_task_changes_state_to_moving() -> void:
 	villager.set_task(task)
 	assert_eq(villager.state, VillagerAgent.State.MOVING_TO_TARGET)
 	assert_eq(villager.current_task_id, task.id)
+
+func test_dead_villager_rejects_set_task() -> void:
+	var villager = VillagerAgent.new(1, "Gale", Vector2i(5, 5))
+	villager.status = VillagerAgent.Status.DEAD
+	var board = TaskBoard.new()
+	var task = board.create_task("gather_food", Vector2i(3, 3), 0)
+	villager.set_task(task)
+	assert_eq(villager.state, VillagerAgent.State.IDLE)
+	assert_eq(villager.current_task_id, -1)

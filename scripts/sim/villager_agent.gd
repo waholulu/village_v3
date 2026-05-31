@@ -2,11 +2,13 @@ class_name VillagerAgent
 extends RefCounted
 
 enum State { IDLE, MOVING_TO_TARGET }
+enum Status { HEALTHY, TIRED, INJURED, SICK, DEAD }
 
 var id: int
 var name: String
 var tile_position: Vector2i
 var state: State = State.IDLE
+var status: Status = Status.HEALTHY
 var current_task_id: int = -1
 var hunger: int = 0
 
@@ -19,6 +21,8 @@ func _init(p_id: int, p_name: String, start_pos: Vector2i) -> void:
 	tile_position = start_pos
 
 func pick_best_task(board: TaskBoard, store: ResourceStore, gt: GameTime, scorer: UtilityScorer) -> Task:
+	if not can_work():
+		return null
 	var open_tasks = board.get_open_tasks()
 	if open_tasks.is_empty():
 		return null
@@ -32,6 +36,8 @@ func pick_best_task(board: TaskBoard, store: ResourceStore, gt: GameTime, scorer
 	return best_task
 
 func set_task(task: Task) -> void:
+	if not can_work():
+		return
 	current_task_id = task.id
 	state = State.MOVING_TO_TARGET
 
@@ -46,7 +52,15 @@ func clear_task() -> void:
 func get_state_name() -> String:
 	return State.keys()[state]
 
+func get_status_name() -> String:
+	return Status.keys()[status].to_lower()
+
+func can_work() -> bool:
+	return status != Status.DEAD
+
 func tick_movement(delta: float, path: Array[Vector2i], move_interval: float) -> bool:
+	if not can_work():
+		return false
 	if path.is_empty():
 		return false
 	_move_timer += delta

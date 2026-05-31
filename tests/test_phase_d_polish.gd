@@ -21,7 +21,7 @@ func test_clear_task_resets_path_and_timer() -> void:
 func test_scorer_distance_uses_approach_tile() -> void:
 	var scorer := UtilityScorer.new()
 	var store := ResourceStore.new()
-	store.setup(10, 10)  # neutral resources so distance dominates
+	store.setup(10, 10, 0)  # neutral resources so distance dominates
 	var gt := GameTime.new()
 	add_child_autoqfree(gt)
 	# Two tasks differing ONLY in approach_tile placement. The target is the

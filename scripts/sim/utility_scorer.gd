@@ -6,7 +6,7 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, _gt: 
 	# but currently unused — all scoring is need + distance, day/night
 	# behavioral switches are encoded as scorer arms not as gt.phase reads.
 	var score: float = 0.0
-	var food: int = store.get_resource("food")
+	var food: int = store.get_total_food()
 	var wood: int = store.get_resource("wood")
 	# Distance to approach tile, not target. Villager actually walks to
 	# approach_tile (target may be non-walkable like a tree or build_site).

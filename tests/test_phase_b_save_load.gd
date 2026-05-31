@@ -11,12 +11,13 @@ var pf: PathfindingService
 func before_each() -> void:
 	var balance := BalanceData.new()
 	balance.starting_wood = 10
-	balance.starting_food = 8
+	balance.starting_fresh_food = 8
+	balance.starting_stored_food = 0
 	balance.villager_count = 3
 	balance.starting_population_capacity = 3
 	balance.day_duration_seconds = 10.0
 	balance.night_duration_seconds = 5.0
-	balance.days_to_win = 7
+	balance.days_per_season = 5
 	wg = WorldGenerator.new()
 	wg.generate_fixed()
 	pf = PathfindingService.new()
@@ -93,8 +94,8 @@ func test_load_emits_stock_changed_so_hud_refreshes() -> void:
 	var sm := SaveManager.new()
 	sm.save(sim)
 	sm.load_into(sim)
-	# Load calls store.setup which emits both wood and food.
-	assert_signal_emit_count(sim.store, "stock_changed", 2)
+	# Load refreshes legacy food fields and the strategic MVP resource set.
+	assert_signal_emit_count(sim.store, "stock_changed", 8)
 
 func test_save_file_omits_derived_fields() -> void:
 	# Sanity: the new save schema should not bother persisting derived counters
@@ -109,3 +110,38 @@ func test_save_file_omits_derived_fields() -> void:
 	assert_false(data.has("houses"), "buildings live in the grid now")
 	assert_false(data.has("fence_count"), "derived from grid post-load")
 	assert_true(data.has("tiles"), "grid snapshot is the source of truth")
+	assert_true(data.has("fresh_food"), "Phase 1: food split into fresh + stored")
+	assert_false(data.has("food"), "old 'food' key must not appear in new saves")
+	assert_true(data.has("strategic_resources"), "strategic resources are saved as one grouped field")
+
+func test_save_load_preserves_strategic_state() -> void:
+	sim.store.set_resource("population", 8)
+	sim.store.set_resource("food", 17)
+	sim.store.set_resource("security", 12)
+	sim.store.set_resource("morale", 3)
+	sim.zero_food_days = 2
+	sim.zero_morale_days = 1
+	sim.zero_security_days = 0
+	var sm := SaveManager.new()
+	sm.save(sim)
+	sim.store.set_resource("population", 1)
+	sim.store.set_resource("food", 1)
+	sim.store.set_resource("security", 1)
+	sim.store.set_resource("morale", 1)
+	sim.zero_food_days = 0
+	sim.zero_morale_days = 0
+	assert_true(sm.load_into(sim))
+	assert_eq(sim.store.get_resource("population"), 8)
+	assert_eq(sim.store.get_resource("food"), 17)
+	assert_eq(sim.store.get_resource("security"), 12)
+	assert_eq(sim.store.get_resource("morale"), 3)
+	assert_eq(sim.zero_food_days, 2)
+	assert_eq(sim.zero_morale_days, 1)
+
+func test_save_load_preserves_villager_status() -> void:
+	sim.villagers[0].status = VillagerAgent.Status.DEAD
+	var sm := SaveManager.new()
+	sm.save(sim)
+	sim.villagers[0].status = VillagerAgent.Status.HEALTHY
+	assert_true(sm.load_into(sim))
+	assert_eq(sim.villagers[0].status, VillagerAgent.Status.DEAD)

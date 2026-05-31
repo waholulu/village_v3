@@ -141,7 +141,7 @@ func _check_survival_risk(sim: VillageSimulation, anomalies: Array[Dictionary]) 
 	if sim.store == null or sim._balance == null:
 		return
 	var food_needed := sim.villagers.size() * sim._balance.food_consumed_per_villager_per_night * sim._balance.monitor_min_food_nights
-	if sim.store.get_resource("food") < food_needed and not _has_available_food_source(sim):
+	if sim.store.get_total_food() < food_needed and not _has_available_food_source(sim):
 		anomalies.append(_anomaly(
 			"food_survival_risk",
 			"warning",

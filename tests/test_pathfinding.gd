@@ -9,24 +9,30 @@ func before_each() -> void:
 	pf = PathfindingService.new()
 	pf.setup(wg)
 
+# Use HUT-relative positions so tests stay valid regardless of map size /
+# where the village sits. The HUT-clear-radius in _can_place_resource_tile
+# guarantees these are GRASS.
+func _near_hut(dx: int, dy: int) -> Vector2i:
+	return WorldGenerator.HUT_POS + Vector2i(dx, dy)
+
 func test_path_from_a_to_b_is_not_empty() -> void:
-	var path = pf.get_path(Vector2i(5, 5), Vector2i(7, 7))
+	var path = pf.get_path(_near_hut(1, 0), _near_hut(2, 1))
 	assert_gt(path.size(), 0)
 
 func test_path_starts_at_origin() -> void:
-	var path = pf.get_path(Vector2i(5, 5), Vector2i(7, 7))
-	assert_eq(path[0], Vector2i(5, 5))
+	var path = pf.get_path(_near_hut(1, 0), _near_hut(2, 1))
+	assert_eq(path[0], _near_hut(1, 0))
 
 func test_path_ends_at_destination() -> void:
-	var path = pf.get_path(Vector2i(5, 5), Vector2i(7, 7))
-	assert_eq(path[path.size() - 1], Vector2i(7, 7))
+	var path = pf.get_path(_near_hut(1, 0), _near_hut(2, 1))
+	assert_eq(path[path.size() - 1], _near_hut(2, 1))
 
 func test_path_to_same_tile_is_single_element() -> void:
-	var path = pf.get_path(Vector2i(5, 5), Vector2i(5, 5))
+	var path = pf.get_path(_near_hut(1, 0), _near_hut(1, 0))
 	assert_eq(path.size(), 1)
 
 func test_path_does_not_go_through_tree() -> void:
-	var path = pf.get_path(Vector2i(5, 5), Vector2i(7, 7))
+	var path = pf.get_path(_near_hut(1, 0), _near_hut(2, 1))
 	for step in path:
 		assert_ne(wg.get_tile(step.x, step.y), WorldGenerator.TileType.TREE)
 
@@ -43,14 +49,14 @@ func test_update_walkability_allows_new_path() -> void:
 
 func test_path_to_solid_endpoint_is_empty() -> void:
 	var tree_pos = wg.get_tiles_of_type(WorldGenerator.TileType.TREE)[0]
-	var path = pf.get_path(Vector2i(5, 5), tree_pos)
+	var path = pf.get_path(_near_hut(1, 0), tree_pos)
 	assert_eq(path.size(), 0)
 
 func test_constructed_house_is_walkable() -> void:
 	var site = wg.find_next_build_site()
 	wg.set_tile(site.x, site.y, WorldGenerator.TileType.HOUSE)
 	pf.set_point_walkable(site, true)
-	var path = pf.get_path(Vector2i(5, 5), site)
+	var path = pf.get_path(_near_hut(1, 0), site)
 	assert_gt(path.size(), 0)
 	assert_eq(path[path.size() - 1], site)
 

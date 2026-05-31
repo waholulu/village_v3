@@ -13,7 +13,7 @@ func _init() -> void:
 
 	print("=== Headless Simulation Start (preset=%s) ===" % (preset_name if preset_name != "" else "default"))
 
-	# Run at 100× real time so 7 game-days complete in ~0.2 real seconds.
+	# Run at 100× real time so the 60-day MVP loop completes quickly.
 	# time_scale scales _process delta, so GameTime and villager move timers
 	# both advance proportionally — behaviour is identical to real-time play.
 	Engine.time_scale = 100.0
@@ -39,11 +39,13 @@ func _init() -> void:
 
 	_logger = ActionLogger.new()
 	var dt := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
-	var log_path := "user://run_%s.jsonl" % dt
+	var preset_label := preset_name if preset_name != "" else "default"
+	var run_id := "run_%s_%d_%s" % [dt, Time.get_ticks_msec(), preset_label]
+	var log_path := "user://%s.jsonl" % run_id
 	_logger.open(log_path)
 	sim.set_logger(_logger)
 	print("Logging to: %s" % log_path)
-	print("  (local path: %s)" % (OS.get_user_data_dir() + "/run_%s.jsonl" % dt))
+	print("  (local path: %s)" % (OS.get_user_data_dir() + "/%s.jsonl" % run_id))
 
 	_print_snapshot("START", sim)
 
@@ -64,9 +66,16 @@ func _init() -> void:
 		_finished = true
 		print("RESULT: WIN on day %d" % sim.game_time.day)
 		_print_snapshot("FINAL", sim)
-		print("Final wood: %d, food: %d" % [
+		print("Final strategic population: %d, food: %d, security: %d, morale: %d" % [
+			sim.get_strategic_population(),
+			sim.store.get_resource("food"),
+			sim.store.get_resource("security"),
+			sim.store.get_resource("morale")
+		])
+		print("Final legacy wood: %d, fresh_food: %d, stored_food: %d" % [
 			sim.store.get_resource("wood"),
-			sim.store.get_resource("food")
+			sim.store.get_resource("fresh_food"),
+			sim.store.get_resource("stored_food")
 		])
 		_close_logger(sim, "WIN")
 		quit(0)
@@ -75,10 +84,17 @@ func _init() -> void:
 		_finished = true
 		print("RESULT: LOSS - %s" % reason)
 		_print_snapshot("FINAL", sim)
-		print("Day: %d, wood: %d, food: %d" % [
+		print("Day: %d, strategic population: %d, food: %d, security: %d, morale: %d" % [
 			sim.game_time.day,
+			sim.get_strategic_population(),
+			sim.store.get_resource("food"),
+			sim.store.get_resource("security"),
+			sim.store.get_resource("morale")
+		])
+		print("Legacy wood: %d, fresh_food: %d, stored_food: %d" % [
 			sim.store.get_resource("wood"),
-			sim.store.get_resource("food")
+			sim.store.get_resource("fresh_food"),
+			sim.store.get_resource("stored_food")
 		])
 		_close_logger(sim, "LOSS: " + reason)
 		quit(1)
@@ -97,7 +113,7 @@ func _init() -> void:
 	)
 	root.add_child(timer)
 
-	print("Simulating %d days (fast mode)..." % balance.days_to_win)
+	print("Simulating to year end (days_per_season=%d, win at day %d)..." % [balance.days_per_season, balance.days_per_season * 4 + 1])
 
 func _parse_preset_arg() -> String:
 	# Args after `--` are surfaced by get_cmdline_user_args(); we accept the
@@ -116,14 +132,25 @@ func _close_logger(sim: VillageSimulation, result: String) -> void:
 	var nature := sim.get_nature_summary()
 	var villager_data: Array[Dictionary] = []
 	for v in sim.villagers:
-		villager_data.append({"name": v.name, "id": v.id, "hunger": v.hunger})
+		villager_data.append({"name": v.name, "id": v.id, "hunger": v.hunger, "status": v.get_status_name()})
 	_logger.log_event({
 		"event": "run_summary",
 		"result": result,
 		"day": sim.game_time.day,
 		"wood": sim.store.get_resource("wood"),
-		"food": sim.store.get_resource("food"),
-		"population": sim.villagers.size(),
+		"fresh_food": sim.store.get_resource("fresh_food"),
+		"stored_food": sim.store.get_resource("stored_food"),
+		"strategic_population": sim.get_strategic_population(),
+		"strategic_food": sim.store.get_resource("food"),
+		"security": sim.store.get_resource("security"),
+		"morale": sim.store.get_resource("morale"),
+		"visible_population": sim.villagers.size(),
+		"population_mismatch": sim.has_population_mismatch(),
+		"zero_streaks": {
+			"food": sim.zero_food_days,
+			"morale": sim.zero_morale_days,
+			"security": sim.zero_security_days
+		},
 		"deer_count": nature.get("deer_count", 0),
 		"wolf_count": nature.get("wolf_count", 0),
 		"villagers": villager_data
@@ -133,14 +160,22 @@ func _close_logger(sim: VillageSimulation, result: String) -> void:
 
 func _print_snapshot(label: String, sim: VillageSimulation) -> void:
 	print(
-		"%s | day=%d phase=%s tick=%d time_left=%.2f wood=%d food=%d population=%d/%d hungry=%d campfire_out=%d tasks(open=%d claimed=%d done=%d cancelled=%d) anomalies=%d" % [
+		"%s | day=%d phase=%s tick=%d time_left=%.2f strategic(pop=%d food=%d security=%d morale=%d zero=%d/%d/%d) legacy(wood=%d food=%d+%d visible=%d/%d hungry=%d campfire_out=%d) tasks(open=%d claimed=%d done=%d cancelled=%d) anomalies=%d" % [
 			label,
 			sim.game_time.day,
 			sim.game_time.get_phase_name(),
 			sim.game_time.tick,
 			sim.game_time.get_time_left(),
-			sim.store.get_resource("wood"),
+			sim.get_strategic_population(),
 			sim.store.get_resource("food"),
+			sim.store.get_resource("security"),
+			sim.store.get_resource("morale"),
+			sim.zero_food_days,
+			sim.zero_morale_days,
+			sim.zero_security_days,
+			sim.store.get_resource("wood"),
+			sim.store.get_resource("fresh_food"),
+			sim.store.get_resource("stored_food"),
 			sim.villagers.size(),
 			sim.population_capacity,
 			sim.hungry_villagers,
@@ -165,10 +200,11 @@ func _print_snapshot(label: String, sim: VillageSimulation) -> void:
 		sim._fence_count, sim._watchtower_count, sim._storage_count
 	])
 	for v in sim.villagers:
-		print("  %s id=%d state=%s pos=(%d,%d) hunger=%d task=%s" % [
+		print("  %s id=%d state=%s status=%s pos=(%d,%d) hunger=%d task=%s" % [
 			v.name,
 			v.id,
 			v.get_state_name(),
+			v.get_status_name(),
 			v.tile_position.x,
 			v.tile_position.y,
 			v.hunger,

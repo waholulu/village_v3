@@ -4,6 +4,8 @@ extends Node
 const SimulationMonitorScript = preload("res://scripts/sim/simulation_monitor.gd")
 const NatureSystemScript = preload("res://scripts/sim/nature_system.gd")
 const SimulationSnapshotScript = preload("res://scripts/sim/simulation_snapshot.gd")
+const NightResolutionScript = preload("res://scripts/sim/night_resolution.gd")
+const WolfThreatSystemScript = preload("res://scripts/sim/wolf_threat_system.gd")
 
 signal game_won()
 signal game_lost(reason: String)
@@ -28,6 +30,9 @@ var monitor_anomalies: Array[Dictionary] = []
 var hungry_villagers: int = 0
 var campfire_out_nights: int = 0
 var population_capacity: int = 3
+var zero_food_days: int = 0
+var zero_morale_days: int = 0
+var zero_security_days: int = 0
 var _fence_count: int = 0
 var _watchtower_count: int = 0
 var _storage_count: int = 0
@@ -64,14 +69,20 @@ func setup(balance: BalanceData, p_world_gen: WorldGenerator, p_pathfinding: Pat
 	pathfinding = p_pathfinding
 
 	store = ResourceStore.new()
-	store.setup(balance.starting_wood, balance.starting_food)
+	store.setup(balance.starting_wood, balance.starting_fresh_food, balance.starting_stored_food)
+	store.setup_strategic(
+		balance.starting_population,
+		balance.starting_food,
+		balance.starting_wood,
+		balance.starting_security,
+		balance.starting_morale
+	)
 
 	game_time = GameTime.new()
-	game_time.setup(balance.day_duration_seconds, balance.night_duration_seconds, balance.days_to_win)
+	game_time.setup(balance.day_duration_seconds, balance.night_duration_seconds, balance.days_per_season)
 	add_child(game_time)
 	game_time.night_started.connect(_on_night_started)
 	game_time.day_started.connect(_on_day_started)
-	game_time.game_won.connect(_relay_game_won)
 
 	board = TaskBoard.new()
 	scorer = UtilityScorer.new()
@@ -89,12 +100,12 @@ func setup_for_test(wood: int, food: int, villager_count: int) -> void:
 	_reset_state()
 	var balance = BalanceData.new()
 	balance.starting_wood = wood
-	balance.starting_food = food
 	balance.villager_count = villager_count
-	balance.days_to_win = 7
+	balance.days_per_season = 5
 	balance.food_consumed_per_villager_per_night = 1
 	balance.wood_consumed_by_campfire_per_night = 2
 	balance.max_campfire_out_nights = 2
+	balance.fresh_food_spoilage_per_night = 0  # disable spoilage in unit tests
 	balance.starting_population_capacity = villager_count
 	balance.house_wood_cost = 8
 	balance.population_capacity_per_house = 2
@@ -107,14 +118,15 @@ func setup_for_test(wood: int, food: int, villager_count: int) -> void:
 	balance.food_per_deer = 3
 
 	store = ResourceStore.new()
-	store.setup(wood, food)
+	store.setup(wood, food, 0)  # all food as fresh_food in test scenarios
+	store.setup_strategic(villager_count, food, wood, 50, 60)
 
 	game_time = GameTime.new()
-	game_time.setup(10.0, 5.0, 7)
+	game_time.setup(10.0, 5.0, balance.days_per_season)
 	add_child(game_time)
 	game_time.night_started.connect(_on_night_started)
 	game_time.day_started.connect(_on_day_started)
-	game_time.game_won.connect(_relay_game_won)
+
 
 	board = TaskBoard.new()
 	scorer = UtilityScorer.new()
@@ -137,6 +149,9 @@ func _reset_state() -> void:
 	hungry_villagers = 0
 	campfire_out_nights = 0
 	population_capacity = 3
+	zero_food_days = 0
+	zero_morale_days = 0
+	zero_security_days = 0
 	_fence_count = 0
 	_watchtower_count = 0
 	_storage_count = 0
@@ -175,52 +190,15 @@ func _anomalies_equal(a: Array[Dictionary], b: Array[Dictionary]) -> bool:
 			return false
 	return true
 
-func _relay_game_won() -> void:
-	game_won.emit()
-
 func resolve_night() -> void:
-	_resolve_hunger()
-
-	var wood_consumed = store.consume_resource("wood", _balance.wood_consumed_by_campfire_per_night)
-	if wood_consumed < _balance.wood_consumed_by_campfire_per_night:
-		campfire_out_nights += 1
-		_log({"event": "campfire_out", "consecutive_nights": campfire_out_nights,
-			"wood_consumed": wood_consumed, "wood_needed": _balance.wood_consumed_by_campfire_per_night})
-		if campfire_out_nights >= _balance.max_campfire_out_nights:
-			game_lost.emit("Campfire out for %d consecutive nights" % campfire_out_nights)
-	else:
-		campfire_out_nights = 0
-		_log({"event": "campfire_ok", "wood_consumed": wood_consumed})
-	_apply_food_spoilage()
+	NightResolutionScript.resolve(self)
 	run_monitor_check()
 
 func _apply_food_spoilage() -> void:
-	var food_cap: int = _balance.food_base_capacity + _storage_count * _balance.food_capacity_per_storage
-	var food: int = store.get_resource("food")
-	if food <= food_cap:
-		return
-	var divisor: int = max(1, _balance.food_spoilage_divisor)
-	var spoiled: int = int(ceil(float(food - food_cap) / float(divisor)))
-	store.consume_resource("food", spoiled)
-	_log({"event": "food_spoiled", "amount": spoiled,
-		"above_cap": food - food_cap, "cap": food_cap, "remaining": store.get_resource("food")})
-
-func _resolve_hunger() -> void:
-	for v in villagers:
-		var hunger_before: int = v.hunger
-		var consumed := store.consume_resource("food", _balance.food_consumed_per_villager_per_night)
-		var fed: bool = consumed == _balance.food_consumed_per_villager_per_night
-		if fed:
-			v.hunger = maxi(0, v.hunger - 1)
-		else:
-			v.hunger += 1
-		_log({"event": "night_hunger", "villager": v.name, "fed": fed,
-			"hunger": v.hunger, "hunger_delta": v.hunger - hunger_before})
-	_update_hungry_count()
-	for v in villagers:
-		if v.hunger >= _balance.max_hunger:
-			game_lost.emit("A villager starved")
-			return
+	# Thin wrapper kept on the sim because test_building_effects.gd exercises
+	# the spoilage formula in isolation. The full per-night sequence (hunger →
+	# campfire → spoilage) lives in NightResolution.resolve().
+	NightResolutionScript.apply_food_spoilage(self)
 
 func _on_night_started(_day: int) -> void:
 	resolve_night()
@@ -228,39 +206,17 @@ func _on_night_started(_day: int) -> void:
 		_apply_wolf_disruption()
 
 func _apply_wolf_disruption() -> void:
-	if villagers.is_empty():
-		return
-	# Count the threat regardless of mitigation — planner uses this to gate
-	# fence construction so we only fortify after the wolves prove they're a
-	# real problem.
-	_wolf_threat_count += 1
-	# Mix day + threat-count + village size so multi-strike days don't always
-	# hit the same villager and population changes shift the target distribution.
-	var rng := RandomNumberGenerator.new()
-	rng.seed = game_time.day * 31 + _wolf_threat_count * 7 + villagers.size()
-	var idx: int = rng.randi_range(0, villagers.size() - 1)
-	var raw: int = _balance.wolf_hunger_disruption
-	var damage: int = raw
-	if _watchtower_count > 0:
-		damage = (damage + 1) / 2  # halve (rounding up keeps damage >= 1 for raw=1)
-	var fence_mult: float = pow(1.0 - _balance.fence_wolf_damage_reduction, float(_fence_count))
-	damage = int(round(float(damage) * fence_mult))
-	if damage <= 0:
-		_log({"event": "wolf_threat_mitigated", "raw_damage": raw,
-			"fences": _fence_count, "watchtowers": _watchtower_count})
-		return
-	villagers[idx].hunger += damage
-	_log({"event": "wolf_threat", "disrupted_villager": villagers[idx].name,
-		"raw_damage": raw, "mitigated_damage": damage,
-		"fences": _fence_count, "watchtowers": _watchtower_count,
-		"new_hunger": villagers[idx].hunger})
-	_update_hungry_count()
-	# Wolf damage runs AFTER _resolve_hunger's starvation check, so a wolf-pushed
-	# overflow has to be re-checked here or the game would survive one extra night.
-	if villagers[idx].hunger >= _balance.max_hunger:
-		game_lost.emit("A villager starved")
+	# Thin wrapper kept on the sim because test_building_effects.gd and
+	# test_phase_a_fixes.gd exercise wolf damage in isolation. The body lives
+	# in WolfThreatSystem so the file stays under the 600-line guardrail.
+	WolfThreatSystemScript.apply_disruption(self)
 
 func _on_day_started(_day: int) -> void:
+	_resolve_strategic_daily_state()
+	# Win when the player survives through the final MVP day.
+	if _day > get_days_to_win():
+		game_won.emit()
+		return
 	# Hunt tasks pinned to last-day's deer positions are stale by now.
 	# return_home / refuel_campfire used to be cancelled here too but those
 	# task types were removed in the Phase C cleanup (Codex/Claude: do not
@@ -275,6 +231,45 @@ func _on_day_started(_day: int) -> void:
 		wildlife_changed.emit(nature.get_animals_as_dicts())
 	_run_construction_planner()
 	_grow_population_if_possible()
+
+func get_days_to_win() -> int:
+	return _balance.days_per_season * 4
+
+func get_strategic_population() -> int:
+	return store.get_resource("population") if store else 0
+
+func get_visible_population() -> int:
+	return villagers.size()
+
+func has_population_mismatch() -> bool:
+	return get_strategic_population() != get_visible_population()
+
+func apply_strategic_resource_delta(resource_name: String, delta: int) -> void:
+	store.add_resource(resource_name, delta)
+	if resource_name == "population" and store.get_resource("population") <= 0:
+		game_lost.emit("Population reached 0")
+
+func _resolve_strategic_daily_state() -> void:
+	if store == null or _balance == null:
+		return
+	if store.get_resource("population") <= 0:
+		game_lost.emit("Population reached 0")
+		return
+	zero_food_days = _update_zero_streak("food", zero_food_days)
+	zero_morale_days = _update_zero_streak("morale", zero_morale_days)
+	zero_security_days = _update_zero_streak("security", zero_security_days)
+	var limit: int = _balance.zero_resource_loss_days
+	if zero_food_days >= limit:
+		game_lost.emit("Food stayed at 0 for %d days" % zero_food_days)
+	elif zero_morale_days >= limit:
+		game_lost.emit("Morale stayed at 0 for %d days" % zero_morale_days)
+	elif zero_security_days >= limit:
+		game_lost.emit("Security stayed at 0 for %d days" % zero_security_days)
+
+func _update_zero_streak(resource_name: String, current_streak: int) -> int:
+	if store.get_resource(resource_name) <= 0:
+		return current_streak + 1
+	return 0
 
 func _run_construction_planner() -> void:
 	if _planner == null or not _task_gen_enabled:
@@ -302,7 +297,8 @@ func _update_nature_for_day(day: int) -> void:
 	for task in board._tasks:
 		if task.status == Task.Status.OPEN or task.status == Task.Status.CLAIMED:
 			blocked.append(task.approach_tile)
-	var changes: Array[Dictionary] = nature.update_day(day, world_gen, blocked)
+	var season: int = int(game_time.current_season) if game_time else 0
+	var changes: Array[Dictionary] = nature.update_day(day, world_gen, blocked, season)
 	for change in changes:
 		var pos: Vector2i = change["pos"]
 		var tile_type: int = change["type"]
@@ -376,17 +372,19 @@ func _process(delta: float) -> void:
 	_tick_villagers(delta)
 
 func _generate_tasks() -> void:
-	var food: int = store.get_resource("food")
+	var total_food: int = store.get_total_food()
 	var wood: int = store.get_resource("wood")
+	var season: GameTime.Season = game_time.current_season if game_time else GameTime.Season.SPRING
 	# Cancel surplus open tasks only once stock crosses the *surplus* threshold,
 	# not the *low* threshold. Between low and surplus we leave existing OPEN
 	# tasks alone so idle villagers can keep working — otherwise everyone goes
 	# idle the instant we satisfy the survival floor.
-	if food >= _balance.food_surplus_threshold:
+	if total_food >= _balance.food_surplus_threshold:
 		_cancel_open_tasks_of_type("gather_food", "food_above_surplus_threshold")
 	if wood >= _balance.wood_surplus_threshold:
 		_cancel_open_tasks_of_type("chop_tree", "wood_above_surplus_threshold")
-	if food < _balance.food_low_threshold:
+	# Berry bushes go dormant in winter — no gather_food tasks in winter season.
+	if total_food < _balance.food_low_threshold and season != GameTime.Season.WINTER:
 		for bush_pos in world_gen.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH):
 			_try_create_resource_task("gather_food", bush_pos)
 	# Hunt tasks generated whenever deer are in range regardless of food level.
@@ -418,6 +416,11 @@ func _try_create_resource_task(task_type: String, target_tile: Vector2i) -> void
 
 func _tick_villagers(delta: float) -> void:
 	for v in villagers:
+		if not v.can_work():
+			if v.current_task_id != -1:
+				board.cancel_task(v.current_task_id)
+				v.clear_task()
+			continue
 		if v.state == VillagerAgent.State.IDLE:
 			var task: Task = v.pick_best_task(board, store, game_time, scorer)
 			if task != null:
@@ -475,19 +478,19 @@ func _execute_task_at_target(v: VillagerAgent) -> void:
 			if pathfinding:
 				pathfinding.set_point_walkable(task.target_tile, true)
 			tile_changed.emit(task.target_tile, WorldGenerator.TileType.GRASS)
-			store.add_resource("food", _balance.food_per_bush)
+			store.add_resource("fresh_food", _balance.food_per_bush)
 			_log({"event": "task_completed", "villager": v.name, "task": "gather_food",
-				"food_gained": _balance.food_per_bush, "food_total": store.get_resource("food")})
+				"food_gained": _balance.food_per_bush, "fresh_food_total": store.get_resource("fresh_food")})
 		"hunt_deer":
 			if nature:
 				var deer: WildlifeAgent = nature.find_animal_at(task.target_tile, WildlifeAgent.Kind.DEER)
 				if deer != null:
 					nature.remove_animal(deer.id)
-					store.add_resource("food", _balance.food_per_deer)
+					store.add_resource("fresh_food", _balance.food_per_deer)
 					wildlife_changed.emit(nature.get_animals_as_dicts())
 					_log({"event": "deer_hunted", "villager": v.name, "deer_id": deer.id,
 						"pos": [task.target_tile.x, task.target_tile.y],
-						"food_gained": _balance.food_per_deer, "food_total": store.get_resource("food")})
+						"food_gained": _balance.food_per_deer, "fresh_food_total": store.get_resource("fresh_food")})
 				else:
 					_log({"event": "deer_escaped", "villager": v.name,
 						"pos": [task.target_tile.x, task.target_tile.y]})
@@ -539,9 +542,14 @@ func _grow_population_if_possible() -> void:
 		return
 	if villagers.size() >= population_capacity:
 		return
-	if not store.has_enough("food", _balance.food_required_for_new_villager):
+	var req: int = _balance.food_required_for_new_villager
+	if store.get_total_food() < req:
 		return
-	store.consume_resource("food", _balance.food_required_for_new_villager)
+	# Consume stored_food first; fall back to fresh_food if needed.
+	var from_stored: int = store.consume_resource("stored_food", req)
+	var remaining: int = req - from_stored
+	if remaining > 0:
+		store.consume_resource("fresh_food", remaining)
 	var new_v: VillagerAgent = _add_villager()
 	_log({"event": "villager_born", "name": new_v.name, "id": new_v.id,
 		"food_consumed": _balance.food_required_for_new_villager,

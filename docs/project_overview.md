@@ -7,15 +7,18 @@ see `CLAUDE.md`.
 
 ## Goal
 
-A small, observable, deterministic Godot 4 village simulation:
+A small, observable, deterministic Godot 4 village survival MVP:
 
-- 3 villagers, autonomous, no direct player control.
-- Survive past day 7 to win.
-- Lose when any villager reaches `max_hunger` (default 3) **or** when
-  campfire stays out for `max_campfire_out_nights` consecutive nights
-  (default 2).
-- A `hard` balance preset exercises wolf threats; the default preset
-  produces a comfortable run.
+- Strategic village state starts with population 10, food 40, wood 25,
+  security 50, and morale 60.
+- 3 visible villagers remain autonomous as the execution layer during the
+  transition to the policy/event MVP.
+- Survive through day 60 to win. The win signal fires after the day 60
+  resolution, on day 61.
+- Lose when strategic population reaches 0, or when food, morale, or
+  security stays at 0 for 3 consecutive daily resolutions.
+- Legacy hunger, campfire, wildlife, and construction systems still run
+  during the migration and remain covered by their existing tests.
 
 ## Tech stack
 
@@ -34,13 +37,13 @@ The exact commands live in `CLAUDE.md`. Common ones:
 
 ```powershell
 # Tests
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -ginclude_subdirs -gexit
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
 
-# Default headless smoke (~7s real time)
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd
+# Default headless smoke
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd
 
 # Hard preset headless
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd -- preset=hard
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd -- preset=hard
 
 # Live play
 & "E:\godot\Godot_v4.6.3-stable_win64.exe" --path "E:\godot\tiny-campfire-village"
@@ -50,8 +53,8 @@ After adding any new `.gd` with a `class_name`, run `--import` first.
 
 ## Test status
 
-Latest run: **188 GUT tests, all passing**. Default headless completes
-day 8 win with 0 monitor anomalies. Every simulation rule change must
+Latest run: **219 GUT tests, all passing**. Default headless completes
+with a day 61 win and 0 monitor anomalies. Every simulation rule change must
 land with a focused test — see Phase A/B/C/D regression tests
 (`tests/test_phase_*_*.gd`) as templates.
 
@@ -105,12 +108,12 @@ set_point_walkable → tile_changed.emit → store.add_resource) and the
 |---|---|
 | `BalanceData` | Reflectively loads tunable values; warns on unknown keys |
 | `GameTime` | Day/night phase + signals |
-| `ResourceStore` | wood/food with `stock_changed` signal |
-| `WorldGenerator` | Deterministic 40×27 grid + `_tile_index` cache + reachability guarantees |
+| `ResourceStore` | Strategic resources plus legacy fresh/stored food with `stock_changed` signal |
+| `WorldGenerator` | Deterministic 60×40 grid + `_tile_index` cache + reachability guarantees |
 | `PathfindingService` | `AStarGrid2D` wrapper |
 | `Task` / `TaskBoard` | Task data + status transitions + `clear_stale()` |
 | `UtilityScorer` | Pure function — `score_task(v, t, store, _gt) -> float` |
-| `VillagerAgent` | Two-state machine (IDLE / MOVING_TO_TARGET) |
+| `VillagerAgent` | Two-state movement plus coarse MVP status/work eligibility |
 | `WildlifeAgent` | Deer / wolf entity |
 | `NatureSystem` | Wildlife + regrowth + wolf threat check |
 | `BuildingDefs` | Data table for 4 building types |
@@ -118,14 +121,15 @@ set_point_walkable → tile_changed.emit → store.add_resource) and the
 | `VillageSimulation` | Orchestrator + signal source |
 | `SimulationMonitor` | Anomaly checker (no state mutation) |
 | `ActionLogger` | JSONL writer for headless audits |
-| `SaveManager` | Full-grid snapshot + idle reset on load |
+| `SaveManager` | Full-grid snapshot, strategic resources, zero streaks, villager status, idle reset on load |
 
 ## Balance highlights (default preset)
 
 | Key | Value |
 |---|---|
-| starting_wood / starting_food | 10 / 8 |
-| villager_count / days_to_win | 3 / 7 |
+| starting_population / starting_food | 10 / 40 |
+| starting_wood / starting_security / starting_morale | 25 / 50 / 60 |
+| visible villagers / strategic run length | 3 / 60 days |
 | wood_per_tree / food_per_bush | 3 / 2 |
 | food / wood low_threshold | 6 / 6 |
 | food / wood surplus_threshold | 12 / 12 |
@@ -137,10 +141,11 @@ Full schema in `scripts/core/balance_data.gd`.
 
 ## What's deliberately NOT here
 
-- No needs beyond hunger (no mood, tiredness, cold).
+- No personal need systems beyond legacy hunger; villager status is a
+  coarse MVP health/work-eligibility flag, not a mood or schedule model.
 - No routines / schedules / shifts.
 - No skills / XP / tools-with-durability.
-- No combat system; wolf attacks reuse the hunger track.
+- No combat system; wolf attacks still use the legacy survival track.
 - No mod loader, scripting API, multi-map, or save-format versioning.
 
 These are listed exhaustively in `ROADMAP.md`'s anti-features section and

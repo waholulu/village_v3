@@ -46,9 +46,10 @@ func _condition_met(key: String, sim: VillageSimulation) -> bool:
 		"watchtower":
 			return sim.game_time != null and sim.game_time.day >= 4 and sim._watchtower_count == 0
 		"storage":
-			var food: int = sim.store.get_resource("food")
-			var cap: int = sim._balance.food_base_capacity + sim._storage_count * sim._balance.food_capacity_per_storage
-			return food > cap - 5 and sim._storage_count < BuildingDefs.BUILDINGS["storage"].max_count
+			# Build storage when food stock is plentiful; storage increases
+			# stored_food capacity in Phase 2+.
+			return sim.store.get_total_food() >= sim._balance.food_surplus_threshold \
+				and sim._storage_count < BuildingDefs.BUILDINGS["storage"].max_count
 	return false
 
 func _has_wolves(sim: VillageSimulation) -> bool:

@@ -10,13 +10,14 @@ var planner: ConstructionPlanner
 func before_each() -> void:
 	var balance := BalanceData.new()
 	balance.starting_wood = 20
-	balance.starting_food = 4
+	balance.starting_fresh_food = 4
+	balance.starting_stored_food = 0
 	balance.villager_count = 3
 	balance.starting_population_capacity = 3
 	balance.population_growth_enabled = true
 	balance.day_duration_seconds = 10.0
 	balance.night_duration_seconds = 5.0
-	balance.days_to_win = 7
+	balance.days_per_season = 5
 	wg = WorldGenerator.new()
 	wg.generate_fixed()
 	pf = PathfindingService.new()
@@ -54,8 +55,8 @@ func test_watchtower_planned_after_day_4() -> void:
 
 func test_storage_planned_when_food_high() -> void:
 	sim._balance.population_growth_enabled = false
-	# Food cap default 20, condition is food > cap - 5 = 15.
-	sim.store.add_resource("food", 18)  # starts at 4, now 22
+	# food_surplus_threshold=12; add enough fresh_food to push total above it
+	sim.store.add_resource("fresh_food", 18)  # 4 starting + 18 = 22 total
 	var decision: Dictionary = planner.plan(sim)
 	assert_eq(decision.get("type", ""), "storage")
 

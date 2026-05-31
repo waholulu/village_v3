@@ -7,7 +7,8 @@ var pf: PathfindingService
 func before_each() -> void:
 	var balance := BalanceData.new()
 	balance.starting_wood = 8
-	balance.starting_food = 4
+	balance.starting_fresh_food = 0
+	balance.starting_stored_food = 4
 	balance.villager_count = 3
 	balance.starting_population_capacity = 3
 	balance.population_growth_enabled = true
@@ -65,16 +66,16 @@ func test_population_grows_on_day_start_when_capacity_and_food_allow() -> void:
 	sim.population_capacity = 4
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 4)
-	assert_eq(sim.store.get_resource("food"), 2)
+	assert_eq(sim.store.get_total_food(), 2)  # 4 stored - 2 consumed
 
 func test_population_does_not_grow_without_capacity() -> void:
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 3)
-	assert_eq(sim.store.get_resource("food"), 4)
+	assert_eq(sim.store.get_total_food(), 4)
 
 func test_population_does_not_grow_without_food() -> void:
 	sim.population_capacity = 4
-	sim.store.consume_resource("food", 4)
+	sim.store.consume_resource("stored_food", 4)
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 3)
 
@@ -83,4 +84,4 @@ func test_population_does_not_grow_when_population_growth_disabled() -> void:
 	sim.population_capacity = 4
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 3)
-	assert_eq(sim.store.get_resource("food"), 4)
+	assert_eq(sim.store.get_total_food(), 4)

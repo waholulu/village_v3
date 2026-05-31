@@ -89,16 +89,17 @@ func test_task_gen_enabled_resets_to_true_after_test_setup() -> void:
 	assert_true(sim._task_gen_enabled,
 		"real setup() must re-enable task gen even if instance was used for tests")
 
-# --- A5: ResourceStore.setup emits stock_changed ---
+# --- A5: ResourceStore.setup emits stock_changed for all three resources ---
 
 func test_resource_store_setup_emits_signals() -> void:
 	var store := ResourceStore.new()
 	watch_signals(store)
-	store.setup(7, 3)
-	assert_signal_emit_count(store, "stock_changed", 2)
-	# Sanity: both names emitted with their respective amounts.
+	store.setup(7, 3, 0)
+	assert_signal_emit_count(store, "stock_changed", 3)
+	# Sanity: all amounts match.
 	assert_eq(store.get_resource("wood"), 7)
-	assert_eq(store.get_resource("food"), 3)
+	assert_eq(store.get_resource("fresh_food"), 3)
+	assert_eq(store.get_resource("stored_food"), 0)
 
 # --- A6: build_sites placed before reachability check ---
 

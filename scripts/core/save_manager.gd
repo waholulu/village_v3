@@ -13,7 +13,20 @@ func save(sim: VillageSimulation) -> void:
 		"phase": sim.game_time.get_phase_name(),
 		"tick": sim.game_time.tick,
 		"wood": sim.store.get_resource("wood"),
-		"food": sim.store.get_resource("food"),
+		"fresh_food": sim.store.get_resource("fresh_food"),
+		"stored_food": sim.store.get_resource("stored_food"),
+		"strategic_resources": {
+			"population": sim.store.get_resource("population"),
+			"food": sim.store.get_resource("food"),
+			"wood": sim.store.get_resource("wood"),
+			"security": sim.store.get_resource("security"),
+			"morale": sim.store.get_resource("morale"),
+		},
+		"zero_streaks": {
+			"food": sim.zero_food_days,
+			"morale": sim.zero_morale_days,
+			"security": sim.zero_security_days,
+		},
 		"campfire_out_nights": sim.campfire_out_nights,
 		"population_capacity": sim.population_capacity,
 		"wolf_threat_count": sim._wolf_threat_count,
@@ -28,6 +41,7 @@ func save(sim: VillageSimulation) -> void:
 			"tile_x": v.tile_position.x,
 			"tile_y": v.tile_position.y,
 			"hunger": v.hunger,
+			"status": v.get_status_name(),
 		})
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	file.store_string(JSON.stringify(data, "\t"))
@@ -55,7 +69,22 @@ func load_into(sim: VillageSimulation) -> bool:
 	var data: Dictionary = json.get_data()
 
 	# Resources first — store.setup() emits stock_changed so HUD refreshes.
-	sim.store.setup(data["wood"], data["food"])
+	# Backward compat: pre-Phase-1 saves with "food" key load as fresh_food.
+	var fresh_food: int = data.get("fresh_food", data.get("food", 0))
+	var stored_food: int = data.get("stored_food", 0)
+	sim.store.setup(data["wood"], fresh_food, stored_food)
+	var strategic_resources: Dictionary = data.get("strategic_resources", {})
+	sim.store.setup_strategic(
+		strategic_resources.get("population", sim.store.get_resource("population")),
+		strategic_resources.get("food", sim.store.get_resource("food")),
+		strategic_resources.get("wood", sim.store.get_resource("wood")),
+		strategic_resources.get("security", sim.store.get_resource("security")),
+		strategic_resources.get("morale", sim.store.get_resource("morale"))
+	)
+	var zero_streaks: Dictionary = data.get("zero_streaks", {})
+	sim.zero_food_days = zero_streaks.get("food", 0)
+	sim.zero_morale_days = zero_streaks.get("morale", 0)
+	sim.zero_security_days = zero_streaks.get("security", 0)
 	sim.campfire_out_nights = data["campfire_out_nights"]
 	sim.population_capacity = data.get("population_capacity", sim.population_capacity)
 	sim._wolf_threat_count = data.get("wolf_threat_count", 0)
@@ -127,6 +156,7 @@ func _restore_villagers(sim: VillageSimulation, entries: Array) -> void:
 		else:
 			v.tile_position = sim.find_valid_spawn_tile(i)
 		v.hunger = vd.get("hunger", 0)
+		v.status = _status_from_name(vd.get("status", "healthy"))
 		# Reset every transient: villager re-decides on next tick instead of
 		# resuming a task that may not exist (board was just emptied).
 		v.state = VillagerAgent.State.IDLE
@@ -135,3 +165,15 @@ func _restore_villagers(sim: VillageSimulation, entries: Array) -> void:
 		v._move_timer = 0.0
 		max_id = maxi(max_id, v.id)
 	sim._next_villager_id = max_id + 1
+
+func _status_from_name(status_name: String) -> VillagerAgent.Status:
+	match status_name.to_lower():
+		"tired":
+			return VillagerAgent.Status.TIRED
+		"injured":
+			return VillagerAgent.Status.INJURED
+		"sick":
+			return VillagerAgent.Status.SICK
+		"dead":
+			return VillagerAgent.Status.DEAD
+	return VillagerAgent.Status.HEALTHY

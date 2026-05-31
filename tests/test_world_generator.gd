@@ -6,15 +6,17 @@ func before_each() -> void:
 	wg = WorldGenerator.new()
 	wg.generate_fixed()
 
-func test_grid_is_40x27() -> void:
-	assert_eq(wg.grid.size(), 27)
-	assert_eq(wg.grid[0].size(), 40)
+func test_grid_matches_static_dimensions() -> void:
+	assert_eq(wg.grid.size(), WorldGenerator.HEIGHT)
+	assert_eq(wg.grid[0].size(), WorldGenerator.WIDTH)
 
-func test_campfire_at_center() -> void:
-	assert_eq(wg.get_tile(6, 6), WorldGenerator.TileType.CAMPFIRE)
+func test_campfire_at_balanced_position() -> void:
+	assert_eq(wg.get_tile(WorldGenerator.CAMPFIRE_POS.x, WorldGenerator.CAMPFIRE_POS.y),
+		WorldGenerator.TileType.CAMPFIRE)
 
 func test_hut_placed() -> void:
-	assert_eq(wg.get_tile(4, 5), WorldGenerator.TileType.HUT)
+	assert_eq(wg.get_tile(WorldGenerator.HUT_POS.x, WorldGenerator.HUT_POS.y),
+		WorldGenerator.TileType.HUT)
 
 func test_trees_placed() -> void:
 	var trees = wg.get_tiles_of_type(WorldGenerator.TileType.TREE)
@@ -68,17 +70,20 @@ func test_is_in_bounds() -> void:
 	assert_false(wg.is_in_bounds(Vector2i(WorldGenerator.WIDTH, 0)))
 
 func test_grass_is_walkable() -> void:
-	assert_true(wg.is_walkable(5, 5))
+	# A tile adjacent to HUT is always cleared by _can_place_resource_tile, so
+	# it's guaranteed walkable regardless of where the village sits on the map.
+	var near_hut: Vector2i = WorldGenerator.HUT_POS + Vector2i(1, 0)
+	assert_true(wg.is_walkable(near_hut.x, near_hut.y))
 
 func test_tree_is_not_walkable() -> void:
 	var trees = wg.get_tiles_of_type(WorldGenerator.TileType.TREE)
 	assert_false(wg.is_walkable(trees[0].x, trees[0].y))
 
 func test_hut_is_walkable() -> void:
-	assert_true(wg.is_walkable(4, 5))
+	assert_true(wg.is_walkable(WorldGenerator.HUT_POS.x, WorldGenerator.HUT_POS.y))
 
 func test_campfire_is_walkable() -> void:
-	assert_true(wg.is_walkable(6, 6))
+	assert_true(wg.is_walkable(WorldGenerator.CAMPFIRE_POS.x, WorldGenerator.CAMPFIRE_POS.y))
 
 func test_find_walkable_adjacent_for_tree_returns_grass() -> void:
 	var trees = wg.get_tiles_of_type(WorldGenerator.TileType.TREE)
@@ -87,11 +92,13 @@ func test_find_walkable_adjacent_for_tree_returns_grass() -> void:
 	assert_true(wg.is_walkable(adj.x, adj.y))
 
 func test_find_walkable_adjacent_for_isolated_returns_sentinel() -> void:
-	wg.set_tile(5, 4, WorldGenerator.TileType.TREE)
-	wg.set_tile(5, 6, WorldGenerator.TileType.TREE)
-	wg.set_tile(4, 5, WorldGenerator.TileType.TREE)  # overrides hut for this test
-	wg.set_tile(6, 5, WorldGenerator.TileType.TREE)
-	var adj = wg.find_walkable_adjacent(Vector2i(5, 5))
+	# Pick an isolated test cell, then surround it with TREE on all 4 sides.
+	var center := WorldGenerator.HUT_POS + Vector2i(5, 5)
+	wg.set_tile(center.x, center.y - 1, WorldGenerator.TileType.TREE)
+	wg.set_tile(center.x, center.y + 1, WorldGenerator.TileType.TREE)
+	wg.set_tile(center.x - 1, center.y, WorldGenerator.TileType.TREE)
+	wg.set_tile(center.x + 1, center.y, WorldGenerator.TileType.TREE)
+	var adj = wg.find_walkable_adjacent(center)
 	assert_eq(adj, Vector2i(-1, -1))
 
 func _grid_signature(world_gen: WorldGenerator) -> String:

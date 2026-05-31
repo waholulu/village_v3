@@ -10,16 +10,47 @@ For higher-level project framing and the multi-phase outline, see
 
 ## Resources
 
-- `wood` and `food`. Both start from balance keys, both go through
-  `ResourceStore`, both never drop below zero on consumption.
+- Strategic MVP resources now exist in `ResourceStore`: `population`, `food`,
+  `wood`, `security`, and `morale`. Default strategic start is population 10,
+  food 40, wood 25, security 50, morale 60.
+- Resource values clamp at zero on direct set/add/consume paths.
+- During migration, legacy `fresh_food` and `stored_food` still exist for the
+  current hunger, gathering, spoilage, and save/load plumbing. They are not
+  additional player-facing MVP resources.
 - `wildlife_food` no longer exists — deer are full `WildlifeAgent` entities
   with positions, not an integer counter.
 
+## Strategic Run State
+
+- One MVP run lasts 60 days. `days_per_season = 15`, and the win day is
+  `days_per_season * 4`.
+- Seasons derive only from day number:
+  - Spring: days 1-15
+  - Summer: days 16-30
+  - Autumn: days 31-45
+  - Winter: days 46-60
+- Win: after resolving day 60, the next day transition emits `game_won`.
+- Loss: `population <= 0` emits `game_lost`.
+- Loss streak counters track `food`, `morale`, and `security` separately.
+  If any stays at 0 for 3 consecutive daily strategic resolutions, the run
+  is lost. A resource rising above 0 resets only its own streak.
+- Temporary migration state: strategic `population` starts at 10 while the map
+  still spawns 3 visible villager agents. HUD and debug overlay call this out;
+  it must be removed before MVP lock.
+- Villager agents now expose MVP status values: `healthy`, `tired`,
+  `injured`, `sick`, and `dead`. New villagers start `healthy`.
+- `dead` villagers remain in the villager list but cannot claim, receive, or
+  execute work tasks.
+
 ## World
 
-- Fixed 40×27 grid. Generation is deterministic from `world_seed`.
-- `HUT_POS = (4, 5)`, `CAMPFIRE_POS = (6, 6)` — hardcoded in
-  `WorldGenerator`, not configurable via balance.
+- Default 60×40 grid (v3.1; was 40×27 in v3.0). Generation is
+  deterministic from `world_seed`.
+- Default `HUT_POS = (15, 18)`, `CAMPFIRE_POS = (17, 19)`. All four —
+  `world_width`, `world_height`, `hut_pos_x/y`, `campfire_pos_x/y` —
+  are balance keys. `WorldGenerator` exposes them as static vars set
+  at the start of `generate_from_balance`, so `WorldGenerator.WIDTH`
+  / `HUT_POS` call sites keep working.
 - Tile types: `GRASS`, `TREE`, `BERRY_BUSH`, `HUT`, `CAMPFIRE`, `BLOCKED`,
   `BUILD_SITE`, `HOUSE`, `FENCE`, `WATCHTOWER`, `STORAGE`.
 - Walkable: GRASS, HUT, CAMPFIRE, HOUSE, FENCE, WATCHTOWER, STORAGE.
@@ -37,7 +68,8 @@ For higher-level project framing and the multi-phase outline, see
 - `GameTime` advances DAY ⇄ NIGHT on a timer. Durations from balance:
   `day_duration_seconds`, `night_duration_seconds`.
 - Initial DAY phase emits no `day_started` signal (subsequent days do).
-- Win: `day > days_to_win` → emits `game_won`.
+- Win: after day 60 resolves and `day` advances to 61, `VillageSimulation`
+  emits `game_won`.
 
 ## Tasks
 
@@ -171,25 +203,28 @@ In `_on_night_started`:
 - `data/balance_hard.json` is the hard preset.
 - Selected via headless runner CLI: `-- preset=hard`. UI play always
   uses default.
-- Hard preset adjusts 9 keys to force wolf threat to actually fire
-  during a 7-day run (default balance never lets the campfire fail).
+- Hard preset adjusts keys to force wolf threat and scarcity paths to fire
+  during the 60-day run; it is allowed to lose.
 
 ## Save / load
 
-- `SaveManager.save()` writes the full 40×27 grid as `tiles`, plus
-  resources, day/phase, villager positions + hunger + names, and
+- `SaveManager.save()` writes the full current grid as `tiles`, plus
+  legacy food fields, grouped strategic resources, zero-resource streaks,
+  day/phase, villager positions + hunger + names + status, and
   `_wolf_threat_count`. **No tasks, no buildings list, no derived
-  counters** — all reconstructed from the grid.
+  building counters** — all reconstructed from the grid.
 - `load_into()`:
-  - Sets resources via `store.setup()` (which emits `stock_changed` →
-    HUD refreshes).
+  - Sets legacy resources via `store.setup()` and strategic resources via
+    `store.setup_strategic()`; both emit `stock_changed` so HUD refreshes.
+  - Restores `zero_food_days`, `zero_morale_days`, and
+    `zero_security_days`.
   - Restores grid via `world_gen.set_tile()` for each cell.
   - Recomputes `_fence_count` / `_watchtower_count` / `_storage_count`
     from tile counts.
   - Drops the task board (`sim.board = TaskBoard.new()`); tasks
     regenerate next tick.
   - Resets every villager to IDLE with empty path; keeps position +
-    hunger + name + id.
+    hunger + name + id + status.
   - Rebuilds pathfinding from scratch (`pf.setup(wg)`).
   - Emits `tile_changed` for every cell so renderers redraw.
 - No schema version field. Format is still mutating; pre-Phase-B saves

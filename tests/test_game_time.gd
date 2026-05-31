@@ -4,7 +4,7 @@ var gt: GameTime
 
 func before_each() -> void:
 	gt = add_child_autoqfree(GameTime.new())
-	gt.setup(10.0, 5.0, 7)
+	gt.setup(10.0, 5.0, 5)
 
 func test_starts_as_day() -> void:
 	assert_eq(gt.phase, GameTime.Phase.DAY)
@@ -42,17 +42,19 @@ func test_day_started_signal_emitted_on_second_day() -> void:
 	gt._advance_phase()
 	assert_signal_emitted(gt, "day_started")
 
-func test_game_won_signal_after_7_days() -> void:
+func test_season_changed_signal_emitted_on_summer() -> void:
 	watch_signals(gt)
-	for i in range(14):
+	# 10 advances: 5 night+day pairs → day 6 → season becomes Summer
+	for i in range(10):
 		gt._advance_phase()
-	assert_signal_emitted(gt, "game_won")
+	assert_signal_emitted(gt, "season_changed")
+	assert_eq(gt.current_season, GameTime.Season.SUMMER)
 
-func test_no_game_won_before_7_days() -> void:
-	watch_signals(gt)
-	for i in range(12):
+func test_winter_season_at_day_16() -> void:
+	# days_per_season=5: Winter starts at day 16 (season index 3)
+	for i in range(30):  # 15 night+day pairs → day 16
 		gt._advance_phase()
-	assert_signal_not_emitted(gt, "game_won")
+	assert_eq(gt.current_season, GameTime.Season.WINTER)
 
 func test_get_phase_name_day() -> void:
 	assert_eq(gt.get_phase_name(), "Day")

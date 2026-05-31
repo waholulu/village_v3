@@ -6,22 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Run all tests (headless):**
 ```powershell
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -ginclude_subdirs -gexit
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
 ```
 
 **Run a single test file:**
 ```powershell
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -gtest=res://tests/test_night_resolution.gd -gexit
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -gtest=res://tests/test_night_resolution.gd -gexit
 ```
 
 **Import new scripts (required after adding/renaming files, before tests will recognize new class_names):**
 ```powershell
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" --import
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" --import
 ```
 
 **Run headless simulation (full game, fast timers):**
 ```powershell
-& "E:\godot\Godot_v4.6.3-stable_win64.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd
+& "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd
 ```
 
 **Launch game:**
@@ -78,7 +78,7 @@ Each night, each villager is fed individually; if food is insufficient a village
 
 ### Key constants
 
-`WorldGenerator.WIDTH = 40`, `WorldGenerator.HEIGHT = 27`. `HUT_POS = Vector2i(4, 5)`, `CAMPFIRE_POS = Vector2i(6, 6)`.
+`WorldGenerator.WIDTH = 60`, `WorldGenerator.HEIGHT = 40`. `HUT_POS = Vector2i(15, 18)`, `CAMPFIRE_POS = Vector2i(17, 19)`. All four are `static var` set from balance keys (`world_width`, `world_height`, `hut_pos_x/y`, `campfire_pos_x/y`) at the start of `generate_from_balance()`.
 
 ### Balance tuning
 

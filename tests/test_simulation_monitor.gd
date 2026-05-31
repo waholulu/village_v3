@@ -7,12 +7,13 @@ var pf: PathfindingService
 func before_each() -> void:
 	var balance := BalanceData.new()
 	balance.starting_wood = 10
-	balance.starting_food = 8
+	balance.starting_fresh_food = 8
+	balance.starting_stored_food = 0
 	balance.villager_count = 3
 	balance.starting_population_capacity = 3
 	balance.day_duration_seconds = 10.0
 	balance.night_duration_seconds = 5.0
-	balance.days_to_win = 7
+	balance.days_per_season = 5
 	wg = WorldGenerator.new()
 	wg.generate_fixed()
 	pf = PathfindingService.new()
@@ -78,9 +79,10 @@ func test_idle_villager_with_task_is_reported() -> void:
 	sim.villagers[0].current_task_id = task.id
 	assert_true(_has_code(sim.run_monitor_check(), "villager_idle_with_task"))
 
-func test_negative_resource_is_reported() -> void:
+func test_negative_resource_write_clamps_to_zero() -> void:
 	sim.store.add_resource("wood", -11)
-	assert_true(_has_code(sim.run_monitor_check(), "negative_resource"))
+	assert_eq(sim.store.get_resource("wood"), 0)
+	assert_false(_has_code(sim.run_monitor_check(), "negative_resource"))
 
 func test_population_over_capacity_is_reported() -> void:
 	sim.population_capacity = 2
@@ -93,9 +95,9 @@ func test_monitor_signal_emits_when_anomalies_change() -> void:
 	assert_signal_emitted(sim, "monitor_anomalies_changed")
 
 func test_food_survival_risk_when_no_food_source_available() -> void:
-	sim.store.consume_resource("food", sim.store.get_resource("food"))
-	# wildlife_food is now a computed getter (deer count); no assignment needed —
-	# animals start empty at setup time so wildlife_food is already 0.
+	sim.store.consume_resource("fresh_food", 999)
+	sim.store.consume_resource("stored_food", 999)
+	# wildlife_food is now a computed getter (deer count); animals start empty.
 	for bush in wg.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH):
 		wg.set_tile(bush.x, bush.y, WorldGenerator.TileType.GRASS)
 	assert_true(_has_code(sim.run_monitor_check(), "food_survival_risk"))

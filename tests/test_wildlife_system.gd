@@ -105,31 +105,31 @@ func test_wolf_threat_false_when_campfire_burning() -> void:
 	nature.animals.append(wolf)
 	assert_false(nature.check_wolf_threat(0), "Wolf threat should be false when campfire is burning (campfire_out_nights == 0)")
 
-func test_hunt_deer_gives_food() -> void:
+func test_hunt_deer_gives_fresh_food() -> void:
 	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
 	sim.setup_for_test(10, 0, 1)
 	var deer := WildlifeAgent.new(1, WildlifeAgent.Kind.DEER, Vector2i(5, 5), 1)
 	sim.nature.animals.append(deer)
-	var food_before: int = sim.store.get_resource("food")
+	var food_before: int = sim.store.get_resource("fresh_food")
 	var task: Task = sim.board.create_task("hunt_deer", deer.tile_position, 0)
 	task.approach_tile = deer.tile_position
 	sim.board.claim_task(task.id, sim.villagers[0].id)
 	sim.villagers[0].set_task(task)
 	sim.villagers[0].tile_position = deer.tile_position
 	sim._execute_task_at_target(sim.villagers[0])
-	assert_gt(sim.store.get_resource("food"), food_before, "Hunting a deer should increase food")
+	assert_gt(sim.store.get_resource("fresh_food"), food_before, "Hunting a deer should increase fresh_food")
 
 func test_hunt_deer_escaped_gives_no_food() -> void:
 	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
 	sim.setup_for_test(10, 0, 1)
-	var food_before: int = sim.store.get_resource("food")
+	var food_before: int = sim.store.get_resource("fresh_food")
 	var task: Task = sim.board.create_task("hunt_deer", Vector2i(5, 5), 0)
 	task.approach_tile = Vector2i(5, 5)
 	sim.board.claim_task(task.id, sim.villagers[0].id)
 	sim.villagers[0].set_task(task)
 	sim.villagers[0].tile_position = Vector2i(5, 5)
 	sim._execute_task_at_target(sim.villagers[0])
-	assert_eq(sim.store.get_resource("food"), food_before, "Hunting an escaped deer (no animal at tile) should not change food")
+	assert_eq(sim.store.get_resource("fresh_food"), food_before, "Hunting an escaped deer should not change fresh_food")
 
 func test_wildlife_changed_signal_emits() -> void:
 	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
@@ -139,12 +139,13 @@ func test_wildlife_changed_signal_emits() -> void:
 	pf.setup(wg_local)
 	var bal := BalanceData.new()
 	bal.starting_wood = 10
-	bal.starting_food = 8
+	bal.starting_fresh_food = 8
+	bal.starting_stored_food = 0
 	bal.villager_count = 2
 	bal.starting_population_capacity = 2
 	bal.day_duration_seconds = 10.0
 	bal.night_duration_seconds = 5.0
-	bal.days_to_win = 7
+	bal.days_per_season = 5
 	sim.setup(bal, wg_local, pf)
 	watch_signals(sim)
 	sim._on_day_started(1)

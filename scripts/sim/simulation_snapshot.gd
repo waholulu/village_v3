@@ -12,23 +12,38 @@ static func build(sim: VillageSimulation) -> Dictionary:
 	}
 	var food_needed: int = sim.villagers.size() * sim._balance.food_consumed_per_villager_per_night
 	var wood_needed: int = sim._balance.wood_consumed_by_campfire_per_night
+	var total_food: int = sim.store.get_total_food()
 	var risk := {
-		"food_shortfall": maxi(0, food_needed - sim.store.get_resource("food")),
+		"food_shortfall": maxi(0, food_needed - total_food),
 		"wood_shortfall": maxi(0, wood_needed - sim.store.get_resource("wood")),
 		"monitor_anomalies": sim.monitor_anomalies.size(),
 	}
+	var days_to_win: int = sim.get_days_to_win()
 	return {
 		"day": sim.game_time.day,
-		"days_to_win": sim._balance.days_to_win,
+		"days_to_win": days_to_win,
+		"season": sim.game_time.get_season_name() if sim.game_time else "Spring",
 		"phase": sim.game_time.get_phase_name(),
 		"tick": sim.game_time.tick,
 		"time_left": sim.game_time.get_time_left(),
 		"wood": sim.store.get_resource("wood"),
-		"food": sim.store.get_resource("food"),
-		"population": sim.villagers.size(),
+		"strategic_food": sim.store.get_resource("food"),
+		"security": sim.store.get_resource("security"),
+		"morale": sim.store.get_resource("morale"),
+		"fresh_food": sim.store.get_resource("fresh_food"),
+		"stored_food": sim.store.get_resource("stored_food"),
+		"total_food": total_food,
+		"population": sim.get_strategic_population(),
+		"visible_population": sim.get_visible_population(),
+		"population_mismatch": sim.has_population_mismatch(),
 		"population_capacity": sim.population_capacity,
 		"hungry": sim.hungry_villagers,
 		"campfire_out": sim.campfire_out_nights,
+		"zero_streaks": {
+			"food": sim.zero_food_days,
+			"morale": sim.zero_morale_days,
+			"security": sim.zero_security_days,
+		},
 		"tasks": tasks,
 		"nature": sim.get_nature_summary(),
 		"risk": risk,

@@ -42,45 +42,59 @@ func setup(sim: VillageSimulation) -> void:
 	# Initial-state push so labels aren't blank before the first signal fires.
 	_lbl_wood.text = "Wood: %d" % sim.store.get_resource("wood")
 	_lbl_food.text = "Food: %d" % sim.store.get_resource("food")
-	_on_population_changed(sim.villagers.size(), sim.population_capacity)
-	_on_hunger_changed(sim.hungry_villagers)
-	_lbl_campfire.text = "Campfire out: %d" % sim.campfire_out_nights
-	_lbl_day.text = "Day %d/%d — %s" % [sim.game_time.day, sim._balance.days_to_win, sim.game_time.get_phase_name()]
+	_refresh_population_label()
+	_lbl_hungry.text = "Security: %d" % sim.store.get_resource("security")
+	_lbl_campfire.text = "Morale: %d" % sim.store.get_resource("morale")
+	_lbl_day.text = "Day %d — %s %s" % [sim.game_time.day, sim.game_time.get_season_name(), sim.game_time.get_phase_name()]
 	_refresh_tasks_label()
 	_on_wildlife_changed(sim.nature.get_animals_as_dicts() if sim.nature else [])
 	_on_monitor_anomalies_changed(sim.monitor_anomalies)
 
-func _on_stock_changed(resource_name: String, amount: int) -> void:
+func _on_stock_changed(resource_name: String, _amount: int) -> void:
 	if resource_name == "wood":
-		_lbl_wood.text = "Wood: %d" % amount
+		_lbl_wood.text = "Wood: %d" % _amount
 	elif resource_name == "food":
-		_lbl_food.text = "Food: %d" % amount
+		_lbl_food.text = "Food: %d" % _amount
+	elif resource_name == "population":
+		_refresh_population_label()
+	elif resource_name == "security":
+		_lbl_hungry.text = "Security: %d" % _amount
+	elif resource_name == "morale":
+		_lbl_campfire.text = "Morale: %d" % _amount
 
 func _on_day_started(day: int) -> void:
 	if _sim != null:
-		_lbl_day.text = "Day %d/%d — Day" % [day, _sim._balance.days_to_win]
+		_lbl_day.text = "Day %d — %s Day" % [day, _sim.game_time.get_season_name()]
 	else:
 		_lbl_day.text = "Day %d — Day" % day
 
 func _on_night_started(day: int) -> void:
 	if _sim != null:
-		_lbl_day.text = "Day %d/%d — Night" % [day, _sim._balance.days_to_win]
+		_lbl_day.text = "Day %d — %s Night" % [day, _sim.game_time.get_season_name()]
 	else:
 		_lbl_day.text = "Day %d — Night" % day
 
 func _on_night_started_refresh(_day: int) -> void:
-	# Campfire counter only updates after night resolution, so refresh on night
-	# transitions. Tasks counter refreshes here too (cheap, infrequent).
+	# Tasks counter refreshes here too (cheap, infrequent).
 	if _sim == null:
 		return
-	_lbl_campfire.text = "Campfire out: %d" % _sim.campfire_out_nights
+	_lbl_campfire.text = "Morale: %d" % _sim.store.get_resource("morale")
 	_refresh_tasks_label()
 
-func _on_population_changed(current: int, capacity: int) -> void:
-	_lbl_population.text = "Pop: %d/%d" % [current, capacity]
+func _on_population_changed(_current: int, _capacity: int) -> void:
+	_refresh_population_label()
 
-func _on_hunger_changed(hungry_count: int) -> void:
-	_lbl_hungry.text = "Hungry: %d" % hungry_count
+func _on_hunger_changed(_hungry_count: int) -> void:
+	if _sim != null:
+		_lbl_hungry.text = "Security: %d" % _sim.store.get_resource("security")
+
+func _refresh_population_label() -> void:
+	if _sim == null:
+		return
+	if _sim.has_population_mismatch():
+		_lbl_population.text = "Pop: %d (visible %d)" % [_sim.get_strategic_population(), _sim.get_visible_population()]
+	else:
+		_lbl_population.text = "Pop: %d/%d" % [_sim.get_strategic_population(), _sim.population_capacity]
 
 func _on_wildlife_changed(animals: Array) -> void:
 	var deer := 0
@@ -103,7 +117,7 @@ func _on_monitor_anomalies_changed(anomalies: Array[Dictionary]) -> void:
 		return
 	var food_needed: int = _sim.villagers.size() * _sim._balance.food_consumed_per_villager_per_night
 	var wood_needed: int = _sim._balance.wood_consumed_by_campfire_per_night
-	var food_short: int = maxi(0, food_needed - _sim.store.get_resource("food"))
+	var food_short: int = maxi(0, food_needed - _sim.store.get_total_food())
 	var wood_short: int = maxi(0, wood_needed - _sim.store.get_resource("wood"))
 	var status: String = "Attention" if food_short > 0 or wood_short > 0 or anomalies.size() > 0 else "Stable"
 	_lbl_ai.text = "AI: %s  risk F%d/W%d" % [status, food_short, wood_short]

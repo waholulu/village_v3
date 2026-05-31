@@ -7,16 +7,14 @@ var pf: PathfindingService
 func before_each() -> void:
 	var balance := BalanceData.new()
 	balance.starting_wood = 10
-	balance.starting_food = 8
+	balance.starting_fresh_food = 8
+	balance.starting_stored_food = 0
 	balance.villager_count = 3
 	balance.starting_population_capacity = 3
 	balance.day_duration_seconds = 10.0
 	balance.night_duration_seconds = 5.0
-	balance.days_to_win = 7
+	balance.days_per_season = 5
 	balance.wolf_hunger_disruption = 10  # high raw damage so mitigation is visible
-	balance.food_base_capacity = 20
-	balance.food_capacity_per_storage = 10
-	balance.food_spoilage_divisor = 4
 	balance.fence_wolf_damage_reduction = 0.10
 	wg = WorldGenerator.new()
 	wg.generate_fixed()
@@ -52,21 +50,9 @@ func test_watchtower_and_fences_stack() -> void:
 	var after: int = sim.villagers[0].hunger + sim.villagers[1].hunger + sim.villagers[2].hunger
 	assert_eq(after - before, 4)
 
-func test_food_spoils_above_cap() -> void:
-	# food = 40, no storage (cap=20) → spoil ceil((40-20)/4) = 5 → remaining 35
-	sim.store.add_resource("food", 32)  # 8 starting + 32 = 40
+func test_fresh_food_spoils_by_flat_amount_per_night() -> void:
+	# fresh_food_spoilage_per_night=1 (default); flat spoilage regardless of stock
+	sim.store.add_resource("fresh_food", 10)  # 8 starting + 10 = 18
 	sim._apply_food_spoilage()
-	assert_eq(sim.store.get_resource("food"), 35)
-
-func test_storage_raises_food_cap() -> void:
-	# food = 38, 2 storages (cap = 20 + 20 = 40) → no spoilage
-	sim._storage_count = 2
-	sim.store.add_resource("food", 30)  # 8 + 30 = 38
-	sim._apply_food_spoilage()
-	assert_eq(sim.store.get_resource("food"), 38)
-
-func test_food_at_cap_does_not_spoil() -> void:
-	# food = 20 == cap → no spoilage
-	sim.store.add_resource("food", 12)  # 8 + 12 = 20
-	sim._apply_food_spoilage()
-	assert_eq(sim.store.get_resource("food"), 20)
+	assert_eq(sim.store.get_resource("fresh_food"), 17)  # 18 - 1 = 17
+	assert_eq(sim.store.get_resource("stored_food"), 0)  # stored unchanged
