@@ -1,224 +1,596 @@
-# Development Plan — Phase 1: Difficulty Presets
+# Development Plan - Hybrid Event Roguelike MVP
 
-For the full multi-phase outline, anti-features list, and guardrails, see
-`ROADMAP.md`. This document is the tactical plan for the current phase only.
+This document is the tactical plan for the current work cycle. For strategic
+guardrails and anti-features, see `ROADMAP.md`. For exact current runtime
+behavior, keep using `simulation_rules.md`; that file should be updated only
+as implementation phases land.
 
----
+The product direction is:
 
-## Why this phase
+> Village survival pressure + event choices + automatic resolution roguelike,
+> using the existing map, pathfinding, and villager AI as a light execution
+> layer.
 
-The default balance produces a comfortable run: the campfire never lapses,
-so `_apply_wolf_disruption()`, `fence_wolf_damage_reduction`, watchtower
-halving, and `_wolf_threat_count`-gated fence construction are all dormant
-code paths.
+The player is the village elder. The player does not directly control
+villagers. The player chooses one weekly policy, handles event choices, watches
+villagers carry out simple work on the map, and tries to get the village
+through the first winter.
 
-Two consequences:
+The correction from the previous plan is important: do not throw away working
+map/pathfinding/AI code. Keep it, but cap what it is allowed to become.
 
-1. **The wolf threat path is unverified end-to-end in real play.** It's
-   covered by unit tests (`test_wildlife_system.gd`) and by a one-off A/B
-   diagnostic we ran earlier (wolf at corner-trap, 14 days), but no
-   integrated headless run has produced a `wolf_threat` event.
-
-2. **Fence/watchtower construction never triggers.** The reactive fence
-   condition (`_has_wolves(sim) AND _wolf_threat_count > 0`) by design
-   never fires in default play. Their effects are dead code at runtime.
-
-The fix is not to change defaults — the default difficulty is fine. It's
-to add a **hard preset** that forces the campfire to fail at least once, so
-the threat path can be exercised in a reproducible headless run.
-
-This is also a sanity check on the codebase itself: if making the game
-harder requires editing `.gd` files instead of just balance values, the
-behavior wasn't actually parameterized and we have a problem to fix
-*before* adding new features.
+One implementation principle matters more than the exact class names below:
+do not build a second simulation beside the current one. Prefer adapting
+`VillageSimulation`, `ResourceStore`, `GameTime`, `TaskBoard`, and
+`SimulationSnapshot` before adding new state holders. New RefCounted helpers
+are fine when they remove complexity from the orchestrator; parallel game
+state is not.
 
 ---
 
-## Approach
+## MVP Contract
 
-**Side-by-side balance files**, not nested presets. Reasons:
+### Run length
 
-- `BalanceData.load_from_file` is currently flat: `for key in data: if key
-  in self: set(key, data[key])`. Nesting would require a parser rewrite.
-- Diffing two flat JSON files in git is the cleanest way to see "what
-  changed for hard mode."
-- Players who edit balance see one schema, not a nested override system.
+- One run lasts 60 days.
+- Seasons are fixed at 15 days each:
+  - Spring: days 1-15
+  - Summer: days 16-30
+  - Autumn: days 31-45
+  - Winter: days 46-60
+- Win: finish day 60 with no loss condition active.
 
-Concrete shape:
+### Loss conditions
 
+The game is lost when any of these become true:
+
+- `population <= 0`
+- `food == 0` for 3 consecutive daily resolutions
+- `morale == 0` for 3 consecutive daily resolutions
+- `security == 0` for 3 consecutive daily resolutions
+
+All streak counters reset immediately when the tracked resource rises above
+zero.
+
+### Strategic resources
+
+The MVP has exactly 5 player-facing resources:
+
+| Resource | Role |
+|---|---|
+| `population` | Number of living villagers. |
+| `food` | Daily survival pressure. |
+| `wood` | Project, defense, and winter pressure. |
+| `security` | Protection against outside threats. |
+| `morale` | Internal stability and survival pressure. |
+
+Do not add gold, tools, herbs, stone, knowledge, faith, noble relations, trade
+relations, or inventory items in the MVP.
+
+Implementation detail: existing code may temporarily still have lower-level
+state such as hunger or fresh/stored food during migration. The final MVP UI
+and rules should present the five resources above unless a later design
+decision explicitly replaces one.
+
+Do not keep two authoritative resource stores. During migration, either adapt
+`ResourceStore` to expose the five strategic resources or provide a thin
+projection from legacy values. The player-facing values must have one source
+of truth by the end of the phase that introduces them.
+
+### Villagers
+
+Villagers remain lightweight agents on the map, but their gameplay identity is
+only 4 fields:
+
+| Field | Example |
+|---|---|
+| `name` | Mira |
+| `job` | Farmer |
+| `status` | Healthy |
+| `trait` | Hardworking |
+
+Allowed statuses:
+
+- `healthy`
+- `tired`
+- `injured`
+- `sick`
+- `dead`
+
+Allowed implementation-only state:
+
+- stable id
+- map position
+- current path
+- current task id
+- movement timer
+
+Do not add mood values, personal hunger values, family links, marriage, birth,
+aging, skill trees, or relationship networks. If existing hunger remains while
+migrating, treat it as legacy survival plumbing, not a design surface to grow.
+
+Migration rule: the final MVP should show 10 visible villager agents, matching
+the strategic `population` default. During the first migration phases, it is
+acceptable to keep the existing 3 visible agents while `population = 10` is
+tracked as a strategic resource. This avoids turning Phase 1 into a crowding,
+sprite, and pathing pass. The temporary mismatch must be called out in the HUD
+or debug overlay and removed before MVP lock.
+
+### Jobs
+
+The MVP has exactly 5 jobs:
+
+| Job | Primary effect |
+|---|---|
+| Farmer | Stable food production. |
+| Hunter | Food production with injury risk. |
+| Woodcutter | Wood production. |
+| Guard | Security production. |
+| Herbalist | Heals injured or sick villagers. |
+
+Do not add blacksmiths, priests, merchants, miners, cooks, teachers, or other
+jobs in the MVP.
+
+### Retained spatial layer
+
+Keep the existing map, pathfinding, and villager movement, with these limits:
+
+- One village map only.
+- No player building placement sandbox.
+- No pathfinding puzzles as gameplay.
+- No multiple maps or world travel.
+- No per-villager schedules.
+- No second AI layer beyond task scoring and movement.
+- No combat movement system.
+- No resource inventory by tile or container.
+
+The map should make the automatic work readable: villagers walk to simple work
+targets, gather, chop, hunt, repair, guard, or rest. It should not become the
+main strategy layer.
+
+### Tasks and AI
+
+The existing task board and villager AI can stay, but must be constrained:
+
+- Tasks are generated from policy, events, survival pressure, or simple
+  projects.
+- Task types stay capped at 10.
+- Scoring stays one-layer and deterministic.
+- Villagers keep the two-state movement model unless there is a very strong
+  reason to change it.
+- No need locks, anti-oscillation cooldowns, routines, shifts, or GOAP-style
+  planning.
+- If a proposed rule requires special-case AI suppression, redesign the rule.
+
+The AI is an execution detail for the elder's decisions, not the main game.
+
+### Weekly policies
+
+The player chooses exactly one policy per week. No sliders, percentages, or
+per-villager orders.
+
+| Policy | Intended pressure |
+|---|---|
+| Food First | More food from farmers and hunters; small security and morale cost. |
+| Wood First | More wood from woodcutters; lower food and morale. |
+| Defense First | More security from guards; consumes wood; small morale gain. |
+| Rest First | More morale and recovery; lower food and wood output. |
+| Explore Forest | Chance for food, wood, or new villagers; risk events; security cost. |
+
+Policies may affect:
+
+- task generation weights
+- task output
+- task risk
+- daily resource modifiers
+- event weights
+
+Policies may not create new subsystems.
+
+### Daily resolution
+
+Each day uses the existing visual simulation where useful, but the strategic
+order stays fixed:
+
+1. Consume food.
+2. Generate or weight work from the current policy.
+3. Let villagers execute simple tasks on the map.
+4. Convert completed work into resource changes.
+5. Resolve recovery for injured or sick villagers.
+6. Roll for at most one event.
+7. Apply short-term effects.
+8. Update logs, streak counters, season, win, and loss state.
+
+Use the existing day/night clock as the cadence. Do not add a separate weekly
+or daily scheduler on top of it. A reasonable migration shape is: day start
+creates policy-weighted tasks, villagers act during the day, night resolution
+turns completed work and unresolved pressure into the daily summary.
+
+The player-facing result is a daily summary, for example:
+
+```text
+Day 12, Summer
+Food +6
+Wood +3
+Security -1
+Morale +1
+Event: Hunters found wolf tracks near the forest edge.
 ```
-data/balance.json         # default — unchanged
-data/balance_hard.json    # full file, identical schema, tuned values
-```
 
-`headless_runner.gd` accepts an optional preset name from
-`OS.get_cmdline_args()`. If present, loads `balance_<name>.json` instead of
-`balance.json`. Default behavior is unchanged.
+Do not require the player to inspect paths, task queues, or individual work
+orders to understand why the day resolved the way it did.
 
-```
-godot --headless --path . -s res://scripts/core/headless_runner.gd -- preset=hard
-```
+### Events
 
-(Godot passes args after `--` through to the script. We parse with a tiny
-loop in `_init`.)
+The MVP ships with 25 event cards:
+
+| Category | Count |
+|---|---:|
+| Weather | 5 |
+| Beasts | 5 |
+| Disease | 5 |
+| Food | 5 |
+| Villager conflict | 5 |
+
+Each event card has one uniform shape:
+
+- `id`
+- `category`
+- `title`
+- `description`
+- `options` A/B/C
+- immediate result per option
+- optional single short-term effect
+
+Short-term effects are allowed only when they are easy to display and expire
+automatically, for example: "for the next 3 days, food production -2".
+
+Do not add event chains, hidden quest state, or multi-card story arcs in the
+MVP.
+
+### Projects
+
+Formal building placement remains out of scope. The existing construction
+system can be reused only as simple map-visible projects:
+
+| Project | Cost | Completion effect |
+|---|---:|---|
+| Repair Fence | 20 wood | Security +15 |
+| Expand Granary | 15 wood | Food cap +30, only if caps exist by then. |
+| Repair Longhouse | 25 wood | Population cap +5, only if caps exist by then. |
+
+Projects may have a map marker and villager pathing. They are not a building
+tree, zoning system, or placement UI.
 
 ---
 
-## Hard-mode design
+## Migration Strategy
 
-Goal: at least one `wolf_threat` event must fire within 7 game-days,
-**without making the game unwinnable** (we want a reproducible loss case
-later, but Phase 1's ship criterion is just that the path fires).
+The current codebase already contains useful systems: map generation,
+pathfinding, task boards, villager movement, wildlife, construction, save/load,
+HUD, debug overlay, and tests.
 
-Mental simulation against the current sim mechanics:
+The migration should preserve useful infrastructure while changing the design
+center:
 
-- Wolves spawn ≥ 10 tiles from HUT (hardcoded in `_spawn_animals`).
-- A wolf at spawn moves 1 tile per day toward HUT (via pathfinding).
-- `check_wolf_threat` requires `campfire_out_nights > 0` AND wolf within
-  `wolf_threat_radius`.
+1. Keep map/pathfinding/AI running.
+2. Add the strategic 60-day run rules around them.
+3. Let policies and events drive task generation and outputs.
+4. Remove or hide rules that create simulation depth without improving the
+   elder-choice loop.
 
-So we need: (a) campfire fails at least one night, (b) at least one wolf
-is within radius the same night.
-
-Picked deltas (vs. default):
-
-| Key | Default | Hard | Reason |
-|---|---|---|---|
-| `starting_wood` | 10 | 1 | Night 1 campfire eats 2, shortfall = 1, `campfire_out_nights` → 1 |
-| `max_campfire_out_nights` | 2 | 4 | Don't lose immediately on the forced failure; let the game keep running so we can observe whether villagers recover |
-| `starting_food` | 8 | 5 | Tighter food too, but still survivable for night 1 (3 villagers × 1 = 3 consumed) |
-| `wolf_spawn_day` | 4 | 1 | Wolves present from day 1, so they can be in range by night 1 |
-| `wolf_spawn_interval_days` | 3 | 2 | Slightly more frequent so a wolf is reliably nearby |
-| `wolf_threat_radius` | 8 | 10 | Catches wolves at their spawn distance after one move |
-| `wolf_hunger_disruption` | 1 | 2 | Threats matter when they fire |
-
-Everything else (world gen, regrowth, building costs, surplus thresholds)
-stays at default. **Smaller blast radius = easier to debug if hard mode
-misbehaves.**
-
-The expected day-1 trace under this preset:
-
-```
-Day 1 starts:
-  _update_nature_for_day:
-    _spawn_animals: 1 wolf at distance ~10 from HUT
-    _move_animals: wolf moves 1 step → distance ~9
-  (day phase runs normally)
-Night 1:
-  resolve_night: consume 2 wood, only 1 available → campfire_out_nights = 1
-  check_wolf_threat(campfire_out_nights=1):
-    wolf_threat_radius = 10
-    wolf at distance ~9 ≤ 10 → returns true
-  _apply_wolf_disruption:
-    _wolf_threat_count → 1
-    log "wolf_threat" event
-    one villager loses 2 hunger
-```
-
-If this trace doesn't happen in practice, the bug is **interesting** and
-we want to know — that's the whole point of the phase.
+Do not expand map, pathfinding, building, wildlife, or AI while migrating
+unless that change directly supports policies, events, or daily summaries.
 
 ---
 
-## Files touched
+## Phase 0 - Planning Pivot
 
-| File | Change | Estimated LOC |
-|---|---|---|
-| `data/balance_hard.json` | New file. Full schema, copied from `balance.json` with the 7 keys above changed. | +69 (the file itself, but new) |
-| `scripts/core/headless_runner.gd` | Parse `preset=<name>` from `OS.get_cmdline_args()` after `--`. Choose balance path accordingly. Log which preset is active in the run header. | +15 |
-| `tests/test_difficulty_preset.gd` | New GUT test. Load `balance_hard.json` via `BalanceData.load_from_file()`. Construct a sim with this balance. Run for a few in-game seconds (or call `resolve_night()` directly twice). Assert `sim._wolf_threat_count >= 1` and that the latest monitor anomalies list contains no `error`-severity entries. | +50 |
-| `scripts/core/balance_data.gd` | None expected. If the hard preset surfaces a missing field, add the field — but it should be a no-op. | 0 |
-| `scripts/sim/village_simulation.gd` | **No changes.** If you find yourself editing this, stop and read the "Stop and reassess" section in `ROADMAP.md` for Phase 1. | 0 |
+Goal: replace the old expansion plan with this hybrid event roguelike plan.
 
-Total: ~135 lines, of which 69 is a copied JSON.
+Scope:
 
----
+- Update `DEVELOPMENT_PLAN.md`.
+- Update `ROADMAP.md`.
+- Leave `simulation_rules.md` as current runtime documentation until code
+  actually changes.
+- Do not touch implementation files in this phase.
 
-## Test plan
+Done when:
 
-Three layers of verification:
-
-### 1. Unit test (`tests/test_difficulty_preset.gd`)
-
-```gdscript
-extends GutTest
-
-func test_hard_preset_loads() -> void:
-    var balance := BalanceData.new()
-    assert_true(balance.load_from_file("res://data/balance_hard.json"))
-    assert_eq(balance.starting_wood, 1)
-    assert_eq(balance.wolf_spawn_day, 1)
-
-func test_hard_preset_triggers_wolf_threat_within_3_nights() -> void:
-    # Build a sim with the hard preset and step through enough nights to
-    # exercise the threat path. We don't simulate the full day cycle here —
-    # we drive resolve_night() directly after seeding a near-HUT wolf to
-    # keep the test focused on the threat path, not pathfinding luck.
-    ...
-    assert_gte(sim._wolf_threat_count, 1)
-```
-
-The "drive directly" approach keeps this test deterministic and fast
-(< 1 second). End-to-end pathfinding-and-spawn validation happens in
-verification step 2 below.
-
-### 2. Headless hard-mode run
-
-```
-godot --headless --path . -s res://scripts/core/headless_runner.gd -- preset=hard
-```
-
-Grep the resulting JSONL for `"event":"wolf_threat"`. Must find ≥ 1 within
-7 days.
-
-### 3. Default smoke test still passes
-
-The existing 168 tests must stay green and the default-preset headless run
-must still produce `RESULT: WIN on day 8` with 0 anomalies. Phase 1 is a
-**purely additive** change; if anything regresses on the default path,
-something was wired wrong.
+- The roadmap says map, pathfinding, and AI are retained but capped.
+- The tactical plan defines the 60-day, 5-resource, 5-job, 5-policy,
+  25-event-card scope.
+- The current runtime docs have not been rewritten to claim behavior that the
+  game does not yet implement.
 
 ---
 
-## Definition of done
+## Phase 1 - Strategic Run State
 
-All three of the following:
+Goal: create the smallest deterministic 60-day strategic state while keeping
+the existing map simulation available.
 
-1. ✅ Test `test_hard_preset_triggers_wolf_threat_within_3_nights` passes.
-2. ✅ `--preset=hard` headless JSONL contains ≥ 1 `wolf_threat` event.
-3. ✅ Default 168 tests + default headless WIN on day 8 still green.
+Expected files / touch points:
 
-If 1 and 2 fail in a "interesting" way (the path doesn't fire when it
-should), **that is the actual deliverable of the phase** — we just
-surfaced a real bug in the threat mechanism that was hidden by the
-default balance. Document it, fix it, then ship.
+- Prefer extending existing `BalanceData`, `GameTime`, `ResourceStore`,
+  `VillageSimulation`, and `SimulationSnapshot`.
+- Add `scripts/sim/strategic_state.gd` only if it is a small value object or
+  snapshot, not a second runtime simulation.
+- Add `scripts/sim/villager_record.gd` only if adapting current
+  `VillagerAgent` directly would make the agent carry too much strategic data.
+- Add `scripts/sim/season_defs.gd` only if `GameTime` would otherwise grow
+  awkward enum/string conversion code.
+- focused tests under `tests/`
+
+Rules:
+
+- Initial default state:
+  - population: 10
+  - food: 40
+  - wood: 25
+  - security: 50
+  - morale: 60
+  - day: 1 / 60
+  - season: Spring
+- Seasons derive from day number only.
+- Resource values clamp at zero.
+- Loss streak counters track food, security, and morale separately.
+- Dead villagers remain in the villager list with `status = dead`; they do
+  not contribute to work.
+- Map position and task state are implementation state, not extra gameplay
+  fields.
+- Temporary migration allowance: the map may still show 3 visible agents while
+  the strategic state tracks population 10. Tests should make the distinction
+  explicit so it cannot become an accidental permanent rule.
+
+Tests:
+
+- `test_initial_strategic_state_matches_mvp_defaults`
+- `test_season_ranges_are_15_days_each`
+- `test_win_after_resolving_day_60`
+- `test_population_zero_loses_immediately`
+- `test_zero_food_loses_after_3_consecutive_days`
+- `test_zero_morale_loses_after_3_consecutive_days`
+- `test_zero_security_loses_after_3_consecutive_days`
+- `test_zero_streak_resets_when_resource_recovers`
+
+Done when:
+
+- The strategic run state passes tests.
+- Existing map/pathfinding tests still pass if they are touched.
+- `simulation_rules.md` gains a clearly marked section for implemented
+  strategic state rules.
+- Any temporary visible-agent vs strategic-population mismatch is documented in
+  the debug overlay or HUD.
 
 ---
 
-## Out of scope for Phase 1
+## Phase 2 - Policy To Task Bridge
 
-These are tempting and **not now**:
+Goal: make weekly policies drive the existing task and AI loop without adding
+a second AI layer.
 
-- `balance_easy.json` — only build it if a real reason emerges. Two
-  presets are testable; three are an interface.
-- A preset selector UI in live play — players can pass it on the launch
-  command. Don't build a menu.
-- Re-running the whole 168-test suite under hard mode — they encode
-  default-preset behavior, which is fine; hard mode gets its own targeted
-  test instead.
-- Tweaking `_apply_wolf_disruption`, `check_wolf_threat`, or the planner's
-  fence condition. Phase 1 *exercises* these; modifying them is Phase 2 or
-  later if a bug forces it.
+Expected files:
+
+- `scripts/sim/policy_defs.gd`
+- `scripts/sim/job_defs.gd`
+- small changes to current task generation / scorer files
+- focused tests under `tests/`
+
+Rules:
+
+- Policy changes are allowed only on days 1, 8, 15, 22, 29, 36, 43, 50,
+  and 57.
+- If the player has not selected a new policy, the previous policy continues.
+- Food consumption happens before work output.
+- Healthy villagers contribute full output.
+- Tired villagers contribute reduced output.
+- Injured, sick, and dead villagers do not work.
+- Hunters can produce food but can become injured.
+- Herbalists can recover injured or sick villagers.
+- All random rolls use a fixed seed passed through the run state.
+- Existing pathfinding is used only to reach simple task targets.
+- Jobs do not create a second AI system. A villager's job affects task
+  eligibility, task score, output, and risk; it does not add a private routine
+  or behavior tree.
+
+Tests:
+
+- One test for each policy's core modifier.
+- One test for each job's production or recovery rule.
+- `test_daily_resolution_consumes_food_before_production`
+- `test_policy_only_changes_on_week_boundary`
+- `test_policy_changes_task_weights_not_ai_layers`
+- `test_tired_villager_has_reduced_output`
+- `test_injured_sick_dead_villagers_do_not_work`
+- `test_hunter_injury_roll_is_deterministic_with_seed`
+- `test_herbalist_recovery_roll_is_deterministic_with_seed`
+
+Done when:
+
+- A 60-day headless run can resolve with the map simulation enabled.
+- Villagers visibly execute simple work, but the player can understand results
+  from the daily summary.
+- All simulation rules added in this phase are documented in
+  `simulation_rules.md`.
 
 ---
 
-## After this phase
+## Phase 3 - Event Cards
 
-If Phase 1 ships clean, the natural next step is Phase 2 (win-condition
-variants — see `ROADMAP.md`). If Phase 1 surfaces a bug in the wolf threat
-path or fence/watchtower mitigation, fix it as part of this phase before
-moving on — that bug existed silently for days under the default balance
-and is the actual value Phase 1 delivers.
+Goal: make events the primary source of roguelike variation.
 
-Either way, **stop after closing Phase 1.** Don't roll into Phase 2 in the
-same session without a fresh decision to start it.
+Expected files:
+
+- `data/events.json`
+- `scripts/sim/event_deck.gd`
+- `scripts/sim/event_effects.gd`
+- focused tests under `tests/`
+
+Rules:
+
+- Exactly 25 MVP event cards.
+- Event categories are weather, beasts, disease, food, and villager conflict.
+- Every event has exactly 2 or 3 player options.
+- Every option has an immediate result.
+- An option may have at most one short-term effect.
+- Short-term effects have explicit duration in days and expire automatically.
+- At most one event can trigger per day.
+- Event selection is deterministic under the run seed.
+- Event effects may modify strategic resources, villager status, task output,
+  task risk, or policy/event weights.
+- Event effects may not spawn a new AI subsystem.
+- Disease events may set `status = sick` or apply a short-term production /
+  morale penalty. They may not add contagion, immunity, diagnosis, medicine
+  inventory, or a disease simulation.
+
+Tests:
+
+- `test_event_file_contains_25_cards`
+- `test_event_categories_have_5_cards_each`
+- `test_event_options_have_immediate_results`
+- `test_event_option_has_at_most_one_short_term_effect`
+- `test_short_term_effect_expires_after_duration`
+- `test_at_most_one_event_per_day`
+- `test_event_draw_is_deterministic_with_seed`
+- One focused test for each event effect type.
+
+Done when:
+
+- The event deck can be loaded from JSON.
+- Every event effect has a test.
+- Event result text can be included in daily logs.
+
+---
+
+## Phase 4 - Playable UI, Logs, Debug, Save/Load
+
+Goal: expose the hybrid loop in a small playable shell.
+
+Expected files:
+
+- existing HUD and debug overlay files, adjusted only where needed
+- `scripts/core/save_manager.gd`, only if save schema changes
+- existing world view, villager view, and pathfinding remain available
+
+UI requirements:
+
+- First screen shows current day, season, resources, selected policy, map, and
+  daily log.
+- Weekly policy choice is visible only when a policy can be changed.
+- Event choices are modal or otherwise blocking; the day cannot continue until
+  an option is selected.
+- Debug overlay shows run seed, active policy, active short-term effects,
+  loss streak counters, villager records, active tasks, and pathing anomalies.
+
+Save/load requirements:
+
+- Save includes strategic run state, villagers, policy, active effects,
+  pending event, and enough RNG state to keep the next day deterministic.
+- Save may include map/task state only if that state cannot be safely
+  regenerated.
+- Load restores enough state that the next daily resolution is deterministic.
+- No schema version is required during MVP migration unless old saves must be
+  supported.
+
+Tests:
+
+- `test_save_load_preserves_strategic_state`
+- `test_save_load_preserves_villagers`
+- `test_save_load_preserves_policy_and_effects`
+- `test_loaded_run_resolves_next_day_deterministically`
+- Debug overlay smoke test still passes.
+- Existing pathfinding and monitor tests still pass where applicable.
+- Save schema contains one authoritative strategic resource set, not both
+  legacy and new values unless a temporary migration fallback is explicitly
+  tested.
+
+Done when:
+
+- The game runs without errors.
+- Relevant tests pass.
+- Debug overlay works with strategic and spatial state.
+- Map/pathfinding/AI serve the elder-choice loop instead of competing with it.
+
+---
+
+## Phase 5 - Balance And MVP Lock
+
+Goal: make the first winter survivable but tense, then stop.
+
+Balance targets:
+
+- Default run should be winnable with reasonable policy choices.
+- Random events should sometimes force hard choices but not create unavoidable
+  losses from a healthy state.
+- Winter should be the most dangerous season.
+- Explore Forest should be tempting but risky.
+- Rest First should be a real recovery tool, not a wasted week.
+- Watching villagers move should clarify the day, not hide the strategic
+  result.
+
+Verification:
+
+- Run at least 20 deterministic seeds through headless.
+- Confirm at least some wins and some losses under automated policy scripts.
+- Confirm all 25 event cards can appear across seeded runs.
+- Confirm no resource or streak counter goes negative.
+- Confirm debug overlay still reports useful strategic and pathing state.
+
+Done when:
+
+- MVP scope is locked.
+- `simulation_rules.md` fully reflects the implemented hybrid rules.
+- `project_overview.md` is updated to describe the new game.
+- Old roadmap language about expanding into a map sandbox, complex AI,
+  building placement, detailed wildlife simulation, or complex economy is
+  removed or marked legacy.
+
+---
+
+## Out Of Scope For MVP
+
+Do not build these in the first version:
+
+- Player-directed unit control
+- Map expansion beyond the existing small village board
+- Building placement sandbox
+- Room systems
+- Equipment systems
+- Item inventories
+- Trade systems
+- Diplomacy systems
+- Tech trees
+- Religion factions
+- Class systems
+- Law systems
+- Marriage or birth
+- Child growth
+- Villager relationship networks
+- Detailed combat
+- Enemy AI beyond event/resource pressure
+- Multiple villages
+- Complex economy
+- GOAP, ECS, behavior trees, or utility stacks beyond the existing simple
+  scorer
+
+If one of these seems necessary, first prove that the policy + event + light
+map execution loop cannot carry the experience without it.
+
+---
+
+## Definition Of Done
+
+A phase is done only if:
+
+- Game or headless target runs without errors.
+- Relevant GUT tests pass.
+- Debug overlay still works when the phase touches live state.
+- Existing map/pathfinding/AI tests still pass when those systems are touched.
+- No unrelated files changed.
+- Every implemented simulation rule is documented in
+  `docs/simulation_rules.md`.
+
+Documentation-only phases do not require a GUT run, but their final response
+must say that no runtime verification was needed.

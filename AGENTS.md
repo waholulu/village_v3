@@ -3,8 +3,13 @@
 ## Project goal
 Small Godot 4 MVP for testing an agent-friendly game development workflow.
 
-3 villagers, collect wood/food during the day, consume at night, keep campfire alive.
-Survive 7 days = win. Campfire out 2 consecutive nights = lose.
+Hybrid village survival roguelike:
+- Player is the village elder.
+- Player chooses one weekly policy and resolves event choices.
+- Villagers remain autonomous and use the existing map, pathfinding, and task AI as a light execution layer.
+- Target MVP: 60 days, 5 player-facing resources, 5 jobs, 5 weekly policies, 25 event cards.
+- Survive through day 60 = win.
+- Lose if population reaches 0, or food/morale/security stays at 0 for 3 consecutive daily resolutions.
 
 ## Technology
 - Godot 4.6, GDScript
@@ -13,6 +18,7 @@ Survive 7 days = win. Campfire out 2 consecutive nights = lose.
 
 ## Non-negotiables
 - Keep MVP small. No external AI frameworks. No ECS. No GOAP.
+- Preserve useful existing map/pathfinding/AI work, but do not expand it into a map sandbox or complex colony sim.
 - Simulation logic must be separate from rendering.
 - Prefer deterministic behavior (fixed seed).
 - Every simulation rule must have a test.
