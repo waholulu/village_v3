@@ -95,7 +95,7 @@ func test_load_emits_stock_changed_so_hud_refreshes() -> void:
 	sm.save(sim)
 	sm.load_into(sim)
 	# Load refreshes legacy food fields and the strategic MVP resource set.
-	assert_signal_emit_count(sim.store, "stock_changed", 8)
+	assert_signal_emit_count(sim.store, "stock_changed", 11)
 
 func test_save_file_omits_derived_fields() -> void:
 	# Sanity: the new save schema should not bother persisting derived counters

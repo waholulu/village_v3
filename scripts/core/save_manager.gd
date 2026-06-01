@@ -71,14 +71,15 @@ func load_into(sim: VillageSimulation) -> bool:
 	var data: Dictionary = json.get_data()
 
 	# Resources first — store.setup() emits stock_changed so HUD refreshes.
-	# Backward compat: pre-Phase-1 saves with "food" key load as fresh_food.
-	var fresh_food: int = data.get("fresh_food", data.get("food", 0))
+	# Backward compat: pre-Phase-1 saves with top-level "food" load as food.
+	var fresh_food: int = data.get("fresh_food", 0)
 	var stored_food: int = data.get("stored_food", 0)
 	sim.store.setup(data["wood"], fresh_food, stored_food)
 	var strategic_resources: Dictionary = data.get("strategic_resources", {})
+	var authoritative_food: int = strategic_resources.get("food", data.get("food", sim.store.get_resource("food")))
 	sim.store.setup_strategic(
 		strategic_resources.get("population", sim.store.get_resource("population")),
-		strategic_resources.get("food", sim.store.get_resource("food")),
+		authoritative_food,
 		strategic_resources.get("wood", sim.store.get_resource("wood")),
 		strategic_resources.get("security", sim.store.get_resource("security")),
 		strategic_resources.get("morale", sim.store.get_resource("morale"))
@@ -124,7 +125,9 @@ func load_into(sim: VillageSimulation) -> bool:
 		for x in range(WorldGenerator.WIDTH):
 			sim.tile_changed.emit(Vector2i(x, y), sim.world_gen.get_tile(x, y))
 
-	sim.population_changed.emit(sim.villagers.size(), sim.population_capacity)
+	if sim.nature != null:
+		sim.wildlife_changed.emit(sim.nature.get_animals_as_dicts())
+	sim._emit_population_changed()
 	sim._update_hungry_count()  # derives + emits hunger_changed
 	sim.run_monitor_check()
 	print("Loaded from ", SAVE_PATH)

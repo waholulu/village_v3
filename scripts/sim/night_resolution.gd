@@ -21,12 +21,18 @@ static func _resolve_hunger(sim) -> void:
 			"event": "night_hunger",
 			"villager": r["villager"],
 			"fed": r["fed"],
+			"skipped_dead": r.get("skipped_dead", false),
 			"hunger": r["hunger_after"],
 			"hunger_delta": r["hunger_after"] - r["hunger_before"],
+			"food_before": r["food_before"],
+			"food_after": r["food_after"],
+			"consumed_fresh": r["consumed_fresh"],
+			"consumed_stored": r["consumed_stored"],
 		})
 	sim._update_hungry_count()
-	if HungerSystemScript.anyone_starved(sim.villagers, balance.max_hunger):
-		sim.game_lost.emit("A villager starved")
+	for v in sim.villagers:
+		if v.status != VillagerAgent.Status.DEAD and v.hunger >= balance.max_hunger:
+			sim.mark_villager_dead(v, "starvation")
 
 static func _resolve_campfire(sim) -> void:
 	var balance: BalanceData = sim._balance
@@ -63,8 +69,7 @@ static func apply_food_spoilage(sim) -> void:
 	var before: int = sim.store.get_resource("fresh_food")
 	if before <= 0:
 		return
-	var actual_spoil: int = mini(before, spoil)
-	sim.store.consume_resource("fresh_food", actual_spoil)
+	var actual_spoil: int = sim.store.spoil_fresh_food(spoil)
 	sim._log({
 		"event": "food_spoiled",
 		"amount": actual_spoil,

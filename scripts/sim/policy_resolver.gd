@@ -5,8 +5,9 @@ static func resolve_daily(sim: VillageSimulation) -> Dictionary:
 	if sim.store == null or sim._balance == null:
 		return {}
 	var summary := {
-		"food_consumed": sim.store.consume_resource("food", sim._balance.strategic_food_consumed_per_day),
+		"food_consumed": 0,
 		"food": 0,
+		"stored_food": 0,
 		"wood": 0,
 		"security": 0,
 		"morale": 0,
@@ -21,7 +22,10 @@ static func resolve_daily(sim: VillageSimulation) -> Dictionary:
 		var amount: int = modified_output_amount(sim, v, job_output, base)
 		match job_output:
 			"food":
-				sim.store.add_resource("food", amount)
+				var stored_food_gained: int = amount
+				if stored_food_gained > 0:
+					sim.store.add_stored_food(stored_food_gained)
+					summary["stored_food"] += stored_food_gained
 				summary["food"] += amount
 				if v.job == JobDefs.HUNTER and roll_percent(sim, "hunter_injury", v.id) < sim._balance.hunter_injury_chance_percent:
 					v.status = VillagerAgent.Status.INJURED

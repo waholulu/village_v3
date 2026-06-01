@@ -15,9 +15,19 @@ Open project in Godot 4.6 and press F5.
 godot --headless --path . -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -gexit
 ```
 
+## Headless balance audit
+Use the repeatable audit pipeline after balance or simulation-rule changes:
+```
+.\tools\headless_audit.ps1 -Strict
+```
+This runs the deterministic 60-day headless simulation, parses the JSONL action
+log, and writes `.godot/headless_audit/<run>/audit_report.json`. See
+`docs/headless_balance_pipeline.md`.
+
 ## Docs
 - Project overview: `docs/project_overview.md`
 - Simulation rules: `docs/simulation_rules.md`
+- Headless balance pipeline: `docs/headless_balance_pipeline.md`
 - Roadmap: `docs/ROADMAP.md`
 - Current development plan: `docs/DEVELOPMENT_PLAN.md`
 

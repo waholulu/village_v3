@@ -151,7 +151,7 @@ func _reset_state() -> void:
 	villagers.clear()
 	hungry_villagers = 0
 	campfire_out_nights = 0
-	population_capacity = 3
+	population_capacity = 5
 	zero_food_days = 0
 	zero_morale_days = 0
 	zero_security_days = 0
@@ -222,11 +222,6 @@ func _on_day_started(_day: int) -> void:
 	if _day > get_days_to_win():
 		game_won.emit()
 		return
-	# Hunt tasks pinned to last-day's deer positions are stale by now.
-	# return_home / refuel_campfire used to be cancelled here too but those
-	# task types were removed in the Phase C cleanup (Codex/Claude: do not
-	# resurrect them — see ROADMAP anti-features).
-	_cancel_open_tasks_of_type("hunt_deer", "stale_at_day_start")
 	# Purge COMPLETED/CANCELLED tasks so the board doesn't accumulate forever.
 	# Only OPEN/CLAIMED tasks survive — those are the only ones the planner
 	# and scorer ever look at anyway.
@@ -234,6 +229,7 @@ func _on_day_started(_day: int) -> void:
 	_update_nature_for_day(_day)
 	if nature != null:
 		wildlife_changed.emit(nature.get_animals_as_dicts())
+	_cancel_stale_hunt_tasks()
 	_run_construction_planner()
 	_grow_population_if_possible()
 
@@ -243,8 +239,21 @@ func get_days_to_win() -> int:
 func get_strategic_population() -> int:
 	return store.get_resource("population") if store else 0
 
+func get_living_villagers() -> Array[VillagerAgent]:
+	var living: Array[VillagerAgent] = []
+	for v in villagers:
+		if v.status != VillagerAgent.Status.DEAD:
+			living.append(v)
+	return living
+
+func get_living_population() -> int:
+	return get_living_villagers().size()
+
+func get_dead_population() -> int:
+	return maxi(0, villagers.size() - get_living_population())
+
 func get_visible_population() -> int:
-	return villagers.size()
+	return get_living_population()
 
 func has_population_mismatch() -> bool:
 	return get_strategic_population() != get_visible_population()
@@ -265,8 +274,30 @@ func set_policy(policy: String) -> bool:
 
 func apply_strategic_resource_delta(resource_name: String, delta: int) -> void:
 	store.add_resource(resource_name, delta)
-	if resource_name == "population" and store.get_resource("population") <= 0:
-		game_lost.emit("Population reached 0")
+	if resource_name == "population":
+		_emit_population_changed()
+		if store.get_resource("population") <= 0:
+			game_lost.emit("Population reached 0")
+
+func mark_villager_dead(villager: VillagerAgent, reason: String) -> void:
+	if villager == null or villager.status == VillagerAgent.Status.DEAD:
+		return
+	if villager.current_task_id != -1 and board != null:
+		board.cancel_task(villager.current_task_id)
+	villager.status = VillagerAgent.Status.DEAD
+	villager.clear_task()
+	apply_strategic_resource_delta("population", -1)
+	_update_hungry_count()
+	_log({
+		"event": "villager_died",
+		"villager": villager.name,
+		"id": villager.id,
+		"reason": reason,
+		"population": get_strategic_population(),
+		"living_population": get_living_population(),
+		"hunger": villager.hunger,
+	})
+	run_monitor_check()
 
 func _resolve_policy_daily_resources() -> Dictionary:
 	return PolicyResolverScript.resolve_daily(self)
@@ -364,6 +395,31 @@ func _cancel_tasks_with_stale_approach() -> void:
 			"reason": "approach_unwalkable_after_regrowth",
 			"approach": [task.approach_tile.x, task.approach_tile.y]})
 
+func _cancel_stale_hunt_tasks() -> void:
+	if nature == null:
+		return
+	for task in board._tasks:
+		if task.type != "hunt_deer" or task.status != Task.Status.OPEN:
+			continue
+		var reason := _hunt_task_invalid_reason(task)
+		if reason == "":
+			continue
+		board.cancel_task(task.id)
+		_log({"event": "task_cancelled", "task": task.type,
+			"reason": reason, "task_id": task.id})
+
+func _hunt_task_invalid_reason(task: Task) -> String:
+	if nature.find_animal_at(task.target_tile, WildlifeAgent.Kind.DEER) == null:
+		return "deer_no_longer_at_target"
+	var dist: float = Vector2(task.target_tile).distance_to(Vector2(WorldGenerator.HUT_POS))
+	if dist > float(_balance.deer_hunt_radius):
+		return "deer_out_of_hunt_radius"
+	if not world_gen.is_in_bounds(task.approach_tile):
+		return "hunt_approach_out_of_bounds"
+	if not world_gen.is_walkable(task.approach_tile.x, task.approach_tile.y):
+		return "hunt_approach_unwalkable"
+	return ""
+
 func _diff_log_animals(before: Array[Dictionary], after: Array[Dictionary]) -> void:
 	if _logger == null:
 		return
@@ -403,7 +459,7 @@ func _process(delta: float) -> void:
 	_tick_villagers(delta)
 
 func _generate_tasks() -> void:
-	var total_food: int = store.get_total_food()
+	var total_food: int = store.get_resource("food")
 	var wood: int = store.get_resource("wood")
 	var season: GameTime.Season = game_time.current_season if game_time else GameTime.Season.SPRING
 	# Cancel surplus open tasks only once stock crosses the *surplus* threshold,
@@ -416,12 +472,15 @@ func _generate_tasks() -> void:
 		_cancel_open_tasks_of_type("chop_tree", "wood_above_surplus_threshold")
 	# Berry bushes go dormant in winter — no gather_food tasks in winter season.
 	if total_food < _balance.food_low_threshold and season != GameTime.Season.WINTER:
-		for bush_pos in world_gen.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH):
-			_try_create_resource_task("gather_food", bush_pos)
-	# Hunt tasks generated whenever deer are in range regardless of food level.
-	# Scorer deprioritises hunting when food is plentiful; tasks are cancelled
-	# each day-start to avoid villagers chasing deer that have already moved.
-	if nature != null:
+		_try_create_resource_tasks_limited(
+			"gather_food",
+			world_gen.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH)
+		)
+	# Hunt only while food is below surplus. Existing OPEN hunt tasks are
+	# cancelled once food is plentiful; CLAIMED hunters finish their current run.
+	if total_food >= _balance.food_surplus_threshold:
+		_cancel_open_tasks_of_type("hunt_deer", "food_above_surplus_threshold")
+	if nature != null and total_food < _balance.food_surplus_threshold:
 		for animal in nature.animals:
 			var a: WildlifeAgent = animal as WildlifeAgent
 			if a == null or a.kind != WildlifeAgent.Kind.DEER:
@@ -431,8 +490,10 @@ func _generate_tasks() -> void:
 				# target == approach (Task._init defaults approach_tile to target).
 				board.create_task("hunt_deer", a.tile_position, game_time.tick)
 	if wood < _balance.wood_low_threshold:
-		for tree_pos in world_gen.get_tiles_of_type(WorldGenerator.TileType.TREE):
-			_try_create_resource_task("chop_tree", tree_pos)
+		_try_create_resource_tasks_limited(
+			"chop_tree",
+			world_gen.get_tiles_of_type(WorldGenerator.TileType.TREE)
+		)
 	if active_policy == PolicyDefs.DEFENSE_FIRST and store.get_resource("security") < 60:
 		_try_create_walkable_task("guard_watch", WorldGenerator.CAMPFIRE_POS)
 	if active_policy == PolicyDefs.REST_FIRST and _find_recoverable_villager() != null:
@@ -448,6 +509,34 @@ func _try_create_resource_task(task_type: String, target_tile: Vector2i) -> void
 		return
 	var task = board.create_task(task_type, target_tile, game_time.tick)
 	task.approach_tile = adj
+
+func _try_create_resource_tasks_limited(task_type: String, target_tiles: Array[Vector2i]) -> void:
+	var limit: int = maxi(1, _balance.max_open_resource_tasks_per_type)
+	var active_count := _count_active_tasks_of_type(task_type)
+	if active_count >= limit:
+		return
+	var candidates := target_tiles.duplicate()
+	candidates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var da := a.distance_squared_to(WorldGenerator.HUT_POS)
+		var db := b.distance_squared_to(WorldGenerator.HUT_POS)
+		if da == db:
+			return a.y < b.y if a.x == b.x else a.x < b.x
+		return da < db
+	)
+	for target_tile in candidates:
+		if active_count >= limit:
+			return
+		var before := board._tasks.size()
+		_try_create_resource_task(task_type, target_tile)
+		if board._tasks.size() > before:
+			active_count += 1
+
+func _count_active_tasks_of_type(task_type: String) -> int:
+	var count := 0
+	for task in board._tasks:
+		if task.type == task_type and (task.status == Task.Status.OPEN or task.status == Task.Status.CLAIMED):
+			count += 1
+	return count
 
 func _try_create_walkable_task(task_type: String, target_tile: Vector2i) -> void:
 	if board.has_active_task_of_type(task_type):
@@ -502,20 +591,17 @@ func _execute_task_at_target(v: VillagerAgent) -> void:
 func _grow_population_if_possible() -> void:
 	if not _balance.population_growth_enabled:
 		return
-	if villagers.size() >= population_capacity:
+	if get_living_population() >= population_capacity:
 		return
 	var req: int = _balance.food_required_for_new_villager
-	if store.get_total_food() < req:
+	if store.get_resource("food") < req:
 		return
-	# Consume stored_food first; fall back to fresh_food if needed.
-	var from_stored: int = store.consume_resource("stored_food", req)
-	var remaining: int = req - from_stored
-	if remaining > 0:
-		store.consume_resource("fresh_food", remaining)
+	store.consume_food(req, false)
 	var new_v: VillagerAgent = _add_villager()
+	apply_strategic_resource_delta("population", 1)
 	_log({"event": "villager_born", "name": new_v.name, "id": new_v.id,
 		"food_consumed": _balance.food_required_for_new_villager,
-		"population": villagers.size(), "capacity": population_capacity})
+		"population": get_strategic_population(), "capacity": population_capacity})
 	run_monitor_check()
 
 func _add_villager() -> VillagerAgent:
@@ -526,7 +612,7 @@ func _add_villager() -> VillagerAgent:
 	var villager := VillagerAgent.new(_next_villager_id, name, pos, JobDefs.default_for_index(idx))
 	_next_villager_id += 1
 	villagers.append(villager)
-	population_changed.emit(villagers.size(), population_capacity)
+	_emit_population_changed()
 	return villager
 
 func find_valid_spawn_tile(preferred_index: int = 0) -> Vector2i:
@@ -543,11 +629,7 @@ func find_valid_spawn_tile(preferred_index: int = 0) -> Vector2i:
 	return WorldGenerator.HUT_POS
 
 func _update_hungry_count() -> void:
-	var count := 0
-	for v in villagers:
-		if v.hunger > 0:
-			count += 1
-	hungry_villagers = count
+	hungry_villagers = HungerSystem.count_hungry(villagers)
 	hunger_changed.emit(hungry_villagers)
 
 func get_snapshot() -> Dictionary:
@@ -562,3 +644,89 @@ func get_nature_summary() -> Dictionary:
 			"last_update_day": 0
 		}
 	return nature.get_summary()
+
+func inspect_tile(pos: Vector2i) -> Dictionary:
+	var info := {
+		"in_bounds": false,
+		"x": pos.x,
+		"y": pos.y,
+		"tile_type": -1,
+		"tile_name": "Out of bounds",
+		"walkable": false,
+		"feature_kind": "void",
+		"feature_label": "Out of bounds",
+		"villagers": [],
+		"animals": [],
+		"tasks": [],
+	}
+	if world_gen == null or not world_gen.is_in_bounds(pos):
+		return info
+	var tile_type: int = world_gen.get_tile(pos.x, pos.y)
+	info["in_bounds"] = true
+	info["tile_type"] = tile_type
+	info["tile_name"] = WorldGenerator.get_tile_type_name(tile_type)
+	info["walkable"] = world_gen.is_walkable(pos.x, pos.y)
+	match tile_type:
+		WorldGenerator.TileType.TREE:
+			info["feature_kind"] = "resource"
+			info["feature_label"] = "Wood source"
+		WorldGenerator.TileType.BERRY_BUSH:
+			info["feature_kind"] = "resource"
+			info["feature_label"] = "Food source"
+		WorldGenerator.TileType.HUT, WorldGenerator.TileType.CAMPFIRE, WorldGenerator.TileType.HOUSE, WorldGenerator.TileType.FENCE, WorldGenerator.TileType.WATCHTOWER, WorldGenerator.TileType.STORAGE, WorldGenerator.TileType.BUILD_SITE:
+			info["feature_kind"] = "building"
+			info["feature_label"] = WorldGenerator.get_tile_type_name(tile_type)
+		WorldGenerator.TileType.BLOCKED:
+			info["feature_kind"] = "terrain"
+			info["feature_label"] = "Rocky ground"
+		_:
+			info["feature_kind"] = "terrain"
+			info["feature_label"] = WorldGenerator.get_tile_type_name(tile_type)
+	for v in villagers:
+		if v.tile_position != pos:
+			continue
+		info["villagers"].append({
+			"id": v.id,
+			"name": v.name,
+			"job": v.job,
+			"job_name": JobDefs.get_display_name(v.job),
+			"status": v.get_status_name(),
+			"alive": v.status != VillagerAgent.Status.DEAD,
+		})
+	if nature != null:
+		for a in nature.animals:
+			if a.tile_position != pos:
+				continue
+			info["animals"].append({
+				"id": a.id,
+				"kind": int(a.kind),
+				"kind_name": "Wolf" if a.kind == WildlifeAgent.Kind.WOLF else "Deer",
+			})
+	if board != null:
+		for task in board._tasks:
+			if task.status != Task.Status.OPEN and task.status != Task.Status.CLAIMED:
+				continue
+			var relation := ""
+			if task.target_tile == pos and task.approach_tile == pos:
+				relation = "target+approach"
+			elif task.target_tile == pos:
+				relation = "target"
+			elif task.approach_tile == pos:
+				relation = "approach"
+			if relation == "":
+				continue
+			info["tasks"].append({
+				"id": task.id,
+				"type": task.type,
+				"status": Task.Status.keys()[task.status].to_lower(),
+				"claimed_by": task.claimed_by,
+				"relation": relation,
+				"target_x": task.target_tile.x,
+				"target_y": task.target_tile.y,
+				"approach_x": task.approach_tile.x,
+				"approach_y": task.approach_tile.y,
+			})
+	return info
+
+func _emit_population_changed() -> void:
+	population_changed.emit(get_visible_population(), population_capacity)

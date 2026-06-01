@@ -51,9 +51,11 @@ func test_food_first_boosts_farmer_daily_food_output() -> void:
 	sim.active_policy = PolicyDefs.FOOD_FIRST
 	sim.store.set_resource("food", 10)
 	var summary: Dictionary = sim._resolve_policy_daily_resources()
-	assert_eq(summary["food_consumed"], 1)
+	assert_eq(summary["food_consumed"], 0)
 	assert_eq(summary["food"], 3)
-	assert_eq(sim.store.get_resource("food"), 12)
+	assert_eq(summary["stored_food"], 3)
+	assert_eq(sim.store.get_resource("food"), 13)
+	assert_eq(sim.store.get_resource("stored_food"), 9)
 
 func test_wood_first_boosts_woodcutter_daily_output() -> void:
 	var sim := _setup_world_sim()
@@ -95,6 +97,7 @@ func test_explore_forest_boosts_hunter_daily_food_output() -> void:
 	sim.active_policy = PolicyDefs.EXPLORE_FOREST
 	var summary: Dictionary = sim._resolve_policy_daily_resources()
 	assert_eq(summary["food"], 3)
+	assert_eq(summary["stored_food"], 3)
 
 func test_tired_villager_has_reduced_output() -> void:
 	var sim := _setup_world_sim()

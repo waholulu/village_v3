@@ -9,6 +9,27 @@ script = ExtResource("1_hudgd")
 offset_right = 1440.0
 offset_bottom = 78.0
 
+[node name="InspectorPanel" type="Panel" parent="."]
+offset_left = 8.0
+offset_top = 86.0
+offset_right = 496.0
+offset_bottom = 190.0
+
+[node name="LblTileTitle" type="Label" parent="InspectorPanel"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 472.0
+offset_bottom = 28.0
+text = "Tile Inspector"
+
+[node name="LblTileBody" type="Label" parent="InspectorPanel"]
+offset_left = 8.0
+offset_top = 32.0
+offset_right = 472.0
+offset_bottom = 96.0
+text = "Click a tile to inspect its terrain, occupants, and tasks."
+autowrap_mode = 2
+
 [node name="LblDay" type="Label" parent="Panel"]
 offset_left = 8.0
 offset_top = 4.0
@@ -33,42 +54,42 @@ text = "Food: 8"
 [node name="LblPopulation" type="Label" parent="Panel"]
 offset_left = 500.0
 offset_top = 4.0
-offset_right = 630.0
+offset_right = 680.0
 offset_bottom = 28.0
-text = "Pop: 3/3"
+text = "Pop: 5/5  D0"
 
 [node name="LblHungry" type="Label" parent="Panel"]
-offset_left = 650.0
+offset_left = 700.0
 offset_top = 4.0
-offset_right = 790.0
+offset_right = 840.0
 offset_bottom = 28.0
 text = "Hungry: 0"
 
 [node name="LblSpeed" type="Label" parent="Panel"]
-offset_left = 810.0
+offset_left = 860.0
 offset_top = 4.0
-offset_right = 900.0
+offset_right = 950.0
 offset_bottom = 28.0
 text = "Speed: 1x"
 
 [node name="BtnSpeed1" type="Button" parent="Panel"]
-offset_left = 910.0
-offset_top = 2.0
-offset_right = 954.0
-offset_bottom = 30.0
-text = "1x"
-
-[node name="BtnSpeed2" type="Button" parent="Panel"]
 offset_left = 960.0
 offset_top = 2.0
 offset_right = 1004.0
 offset_bottom = 30.0
-text = "2x"
+text = "1x"
 
-[node name="BtnSpeed4" type="Button" parent="Panel"]
+[node name="BtnSpeed2" type="Button" parent="Panel"]
 offset_left = 1010.0
 offset_top = 2.0
 offset_right = 1054.0
+offset_bottom = 30.0
+text = "2x"
+
+[node name="BtnSpeed4" type="Button" parent="Panel"]
+offset_left = 1060.0
+offset_top = 2.0
+offset_right = 1104.0
 offset_bottom = 30.0
 text = "4x"
 

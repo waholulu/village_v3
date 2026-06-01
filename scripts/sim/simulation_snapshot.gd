@@ -10,7 +10,7 @@ static func build(sim: VillageSimulation) -> Dictionary:
 		"completed": sim.board.count_by_status(Task.Status.COMPLETED),
 		"cancelled": sim.board.count_by_status(Task.Status.CANCELLED),
 	}
-	var food_needed: int = sim.villagers.size() * sim._balance.food_consumed_per_villager_per_night
+	var food_needed: int = sim.get_living_population() * sim._balance.food_consumed_per_villager_per_night
 	var wood_needed: int = sim._balance.wood_consumed_by_campfire_per_night
 	var total_food: int = sim.store.get_total_food()
 	var risk := {
@@ -37,6 +37,7 @@ static func build(sim: VillageSimulation) -> Dictionary:
 		"total_food": total_food,
 		"population": sim.get_strategic_population(),
 		"visible_population": sim.get_visible_population(),
+		"dead_population": sim.get_dead_population(),
 		"population_mismatch": sim.has_population_mismatch(),
 		"population_capacity": sim.population_capacity,
 		"hungry": sim.hungry_villagers,

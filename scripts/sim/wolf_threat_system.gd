@@ -16,12 +16,14 @@ extends RefCounted
 #   immediately, not next night
 
 static func apply_disruption(sim) -> void:
-	if sim.villagers.is_empty():
+	var living_villagers: Array[VillagerAgent] = sim.get_living_villagers()
+	if living_villagers.is_empty():
 		return
 	sim._wolf_threat_count += 1
 	var rng := RandomNumberGenerator.new()
-	rng.seed = sim.game_time.day * 31 + sim._wolf_threat_count * 7 + sim.villagers.size()
-	var idx: int = rng.randi_range(0, sim.villagers.size() - 1)
+	rng.seed = sim.game_time.day * 31 + sim._wolf_threat_count * 7 + living_villagers.size()
+	var idx: int = rng.randi_range(0, living_villagers.size() - 1)
+	var target: VillagerAgent = living_villagers[idx]
 	var raw: int = sim._balance.wolf_hunger_disruption
 	var damage: int = raw
 	if sim._watchtower_count > 0:
@@ -36,16 +38,16 @@ static func apply_disruption(sim) -> void:
 			"watchtowers": sim._watchtower_count,
 		})
 		return
-	sim.villagers[idx].hunger += damage
+	target.hunger += damage
 	sim._log({
 		"event": "wolf_threat",
-		"disrupted_villager": sim.villagers[idx].name,
+		"disrupted_villager": target.name,
 		"raw_damage": raw,
 		"mitigated_damage": damage,
 		"fences": sim._fence_count,
 		"watchtowers": sim._watchtower_count,
-		"new_hunger": sim.villagers[idx].hunger,
+		"new_hunger": target.hunger,
 	})
 	sim._update_hungry_count()
-	if sim.villagers[idx].hunger >= sim._balance.max_hunger:
-		sim.game_lost.emit("A villager starved")
+	if target.hunger >= sim._balance.max_hunger:
+		sim.mark_villager_dead(target, "wolf_threat")

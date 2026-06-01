@@ -25,6 +25,7 @@ func _process(_delta: float) -> void:
 	for i in range(_villagers.size()):
 		var v = _villagers[i]
 		_sprites[i].position = Vector2(v.tile_position) * TILE_SIZE
+		_sprites[i].modulate = Color(0.55, 0.55, 0.55, 0.9) if v.status == VillagerAgent.Status.DEAD else Color.WHITE
 
 func _sync_sprites() -> void:
 	# Shrink first so a smaller villager list (after F9 load) doesn't leave

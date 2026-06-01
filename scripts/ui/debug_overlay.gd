@@ -43,8 +43,7 @@ func _build_debug_text() -> String:
 	lines.append("Security: %d" % snapshot["security"])
 	lines.append("Morale: %d" % snapshot["morale"])
 	lines.append("Population: %d / %d" % [snapshot["population"], snapshot["population_capacity"]])
-	if snapshot["population_mismatch"]:
-		lines.append("Visible agents: %d (temporary migration mismatch)" % snapshot["visible_population"])
+	lines.append("Living / dead: %d / %d" % [snapshot["visible_population"], snapshot["dead_population"]])
 	lines.append("Legacy food: %d+%d (total %d)" % [snapshot["fresh_food"], snapshot["stored_food"], snapshot["total_food"]])
 	lines.append("Hungry: %d" % snapshot["hungry"])
 	lines.append("Campfire out: %d" % snapshot["campfire_out"])

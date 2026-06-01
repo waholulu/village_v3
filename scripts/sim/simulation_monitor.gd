@@ -130,17 +130,17 @@ func _check_resources(sim: VillageSimulation, anomalies: Array[Dictionary]) -> v
 			))
 
 func _check_population(sim: VillageSimulation, anomalies: Array[Dictionary]) -> void:
-	if sim.villagers.size() > sim.population_capacity:
+	if sim.get_living_population() > sim.population_capacity:
 		anomalies.append(_anomaly(
 			"population_over_capacity",
 			"warning",
-			"Population %d exceeds capacity %d" % [sim.villagers.size(), sim.population_capacity]
+			"Population %d exceeds capacity %d" % [sim.get_living_population(), sim.population_capacity]
 		))
 
 func _check_survival_risk(sim: VillageSimulation, anomalies: Array[Dictionary]) -> void:
 	if sim.store == null or sim._balance == null:
 		return
-	var food_needed := sim.villagers.size() * sim._balance.food_consumed_per_villager_per_night * sim._balance.monitor_min_food_nights
+	var food_needed := sim.get_living_population() * sim._balance.food_consumed_per_villager_per_night * sim._balance.monitor_min_food_nights
 	if sim.store.get_total_food() < food_needed and not _has_available_food_source(sim):
 		anomalies.append(_anomaly(
 			"food_survival_risk",

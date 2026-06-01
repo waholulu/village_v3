@@ -29,4 +29,8 @@ func test_default_seed_survives_sixty_days_without_monitor_anomalies() -> void:
 	assert_gte(sim.store.get_resource("wood"), 0)
 	assert_gte(sim.store.get_total_food(), 0)
 	for v in sim.villagers:
-		assert_lt(v.hunger, balance.max_hunger)
+		if v.status == VillagerAgent.Status.DEAD:
+			assert_gte(v.hunger, balance.max_hunger)
+		else:
+			assert_lt(v.hunger, balance.max_hunger)
+	assert_false(sim.has_population_mismatch())

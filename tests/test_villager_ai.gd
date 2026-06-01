@@ -35,6 +35,13 @@ func test_returns_null_when_no_open_tasks() -> void:
 	var chosen = villager.pick_best_task(ctx.board, ctx.store, ctx.gt, ctx.scorer)
 	assert_null(chosen)
 
+func test_returns_null_when_all_task_scores_are_negative() -> void:
+	var ctx = _make_context(25, 25)
+	ctx.board.create_task("hunt_deer", Vector2i(35, 35), 0)
+	var villager = VillagerAgent.new(1, "Cora", Vector2i(6, 6))
+	var chosen = villager.pick_best_task(ctx.board, ctx.store, ctx.gt, ctx.scorer)
+	assert_null(chosen)
+
 func test_dead_villager_cannot_pick_task() -> void:
 	var ctx = _make_context(10, 3)
 	ctx.board.create_task("gather_food", Vector2i(3, 3), 0)

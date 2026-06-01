@@ -43,8 +43,7 @@ static func _complete_gather_food(sim: VillageSimulation, v: VillagerAgent, task
 		sim.pathfinding.set_point_walkable(task.target_tile, true)
 	sim.tile_changed.emit(task.target_tile, WorldGenerator.TileType.GRASS)
 	var food_gained: int = sim._modified_output_amount(v, "food", sim._balance.food_per_bush)
-	sim.store.add_resource("fresh_food", food_gained)
-	sim.store.add_resource("food", food_gained)
+	sim.store.add_fresh_food(food_gained)
 	sim._log({"event": "task_completed", "villager": v.name, "task": "gather_food",
 		"food_gained": food_gained, "fresh_food_total": sim.store.get_resource("fresh_food")})
 
@@ -55,8 +54,7 @@ static func _complete_hunt_deer(sim: VillageSimulation, v: VillagerAgent, task: 
 	if deer != null:
 		sim.nature.remove_animal(deer.id)
 		var deer_food: int = sim._modified_output_amount(v, "food", sim._balance.food_per_deer)
-		sim.store.add_resource("fresh_food", deer_food)
-		sim.store.add_resource("food", deer_food)
+		sim.store.add_fresh_food(deer_food)
 		sim.wildlife_changed.emit(sim.nature.get_animals_as_dicts())
 		sim._log({"event": "deer_hunted", "villager": v.name, "deer_id": deer.id,
 			"pos": [task.target_tile.x, task.target_tile.y],
@@ -95,7 +93,7 @@ static func _execute_build(sim: VillageSimulation, v: VillagerAgent, task: Task)
 		sim.pathfinding.set_point_walkable(task.target_tile, true)
 	_apply_building_effect(sim, key)
 	sim.tile_changed.emit(task.target_tile, def.tile_type)
-	sim.population_changed.emit(sim.villagers.size(), sim.population_capacity)
+	sim._emit_population_changed()
 	sim._log({"event": "built", "villager": v.name, "building": key,
 		"pos": [task.target_tile.x, task.target_tile.y], "wood_spent": def.wood_cost})
 	return true

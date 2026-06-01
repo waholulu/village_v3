@@ -13,7 +13,10 @@ var _villager_view: VillagerView
 var _wildlife_view: WildlifeView
 var _save_manager: SaveManager
 var _camera: Camera2D
+var _hud
 var _dragging_camera := false
+var _selected_tile: Vector2i = Vector2i(-1, -1)
+var _has_selected_tile := false
 
 func _ready() -> void:
 	Engine.time_scale = 1.0
@@ -42,26 +45,25 @@ func _ready() -> void:
 
 	# Refresh exactly the changed tile when world_gen mutates (no full-grid scan).
 	_sim.tile_changed.connect(_on_tile_changed)
+	_sim.wildlife_changed.connect(_on_wildlife_changed)
 
 	_villager_view = world_scene.get_node("VillagerView")
 	_villager_view.setup(_sim.villagers)
 
 	_wildlife_view = world_scene.get_node("WildlifeView")
 	_wildlife_view.setup_animals([])
-	_sim.wildlife_changed.connect(func(animals: Array[Dictionary]) -> void:
-		_wildlife_view.setup_animals(animals)
-	)
+	_sim.wildlife_changed.emit(_sim.nature.get_animals_as_dicts() if _sim.nature else [])
 
 	# Forward Events signals
 	_sim.store.stock_changed.connect(_on_stock_changed)
 	_sim.game_time.night_started.connect(Events.night_started.emit)
 	_sim.game_time.day_started.connect(Events.day_started.emit)
 
-	var hud = preload("res://scenes/ui/hud.tscn").instantiate()
-	add_child(hud)
+	_hud = preload("res://scenes/ui/hud.tscn").instantiate()
+	add_child(_hud)
 	# hud.setup() wires all label updaters to sim signals internally — no
 	# per-frame polling and no double-update from this caller.
-	hud.setup(_sim)
+	_hud.setup(_sim)
 
 	var dbg = preload("res://scenes/ui/debug_overlay.tscn").instantiate()
 	add_child(dbg)
@@ -72,6 +74,13 @@ func _ready() -> void:
 
 func _on_tile_changed(pos: Vector2i, new_type: int) -> void:
 	_tilemap.refresh_tile(pos, new_type)
+	if _has_selected_tile and pos == _selected_tile:
+		_refresh_selected_tile(true)
+
+func _on_wildlife_changed(animals: Array[Dictionary]) -> void:
+	_wildlife_view.setup_animals(animals)
+	if _has_selected_tile:
+		_refresh_selected_tile(true)
 
 func _on_stock_changed(resource_name: String, amount: int) -> void:
 	Events.stock_changed.emit(resource_name, amount)
@@ -96,14 +105,19 @@ func _input(event: InputEvent) -> void:
 			KEY_F5:
 				_save_manager.save(_sim)
 			KEY_F9:
-				_save_manager.load_into(_sim)
+				if _save_manager.load_into(_sim):
+					_refresh_selected_tile(true)
 	elif event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_handle_left_click(event.position)
+		elif event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_MIDDLE:
 			_dragging_camera = event.pressed
 	elif event is InputEventMouseMotion and _dragging_camera:
 		_move_camera(-event.relative)
 
 func _process(delta: float) -> void:
+	if _has_selected_tile:
+		_refresh_selected_tile()
 	if _camera == null:
 		return
 	var direction := Vector2.ZERO
@@ -153,3 +167,48 @@ func _clamp_camera() -> void:
 func _set_time_scale(value: float) -> void:
 	Engine.time_scale = value
 	Events.speed_changed.emit(value)
+
+func has_selected_tile() -> bool:
+	return _has_selected_tile
+
+func get_selected_tile() -> Vector2i:
+	return _selected_tile
+
+func _handle_left_click(screen_pos: Vector2) -> void:
+	if not get_viewport_rect().has_point(screen_pos):
+		_clear_selected_tile()
+		return
+	if _hud != null and _hud.is_screen_point_over_ui(screen_pos):
+		return
+	var tile := _screen_to_tile(screen_pos)
+	if not _sim.world_gen.is_in_bounds(tile):
+		_clear_selected_tile()
+		return
+	_select_tile(tile)
+
+func _screen_to_tile(screen_pos: Vector2) -> Vector2i:
+	var viewport_center := get_viewport_rect().size * 0.5
+	var world_pos := _camera.global_position + (screen_pos - viewport_center)
+	var tile_local := _tilemap.to_local(world_pos)
+	return Vector2i(floori(tile_local.x / float(TILE_SIZE)), floori(tile_local.y / float(TILE_SIZE)))
+
+func _select_tile(tile: Vector2i) -> void:
+	_selected_tile = tile
+	_has_selected_tile = true
+	_tilemap.set_selected_tile(tile)
+	_refresh_selected_tile(true)
+
+func _clear_selected_tile() -> void:
+	_has_selected_tile = false
+	_selected_tile = Vector2i(-1, -1)
+	_tilemap.clear_selected_tile()
+	if _hud != null:
+		_hud.clear_tile_inspector()
+
+func _refresh_selected_tile(force: bool = false) -> void:
+	if not _has_selected_tile or _hud == null:
+		return
+	var info := _sim.inspect_tile(_selected_tile)
+	if not force and not info.get("in_bounds", false):
+		return
+	_hud.update_tile_inspector(info)

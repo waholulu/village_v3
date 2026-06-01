@@ -31,12 +31,14 @@ func test_default_preset_unchanged() -> void:
 	assert_eq(balance.starting_wood, 25)
 	assert_eq(balance.starting_fresh_food, 4)
 	assert_eq(balance.starting_stored_food, 12)
-	assert_eq(balance.starting_population, 10)
+	assert_eq(balance.starting_population, 5)
+	assert_eq(balance.villager_count, 5)
+	assert_eq(balance.starting_population_capacity, 5)
 	assert_eq(balance.starting_food, 40)
 	assert_eq(balance.starting_security, 50)
 	assert_eq(balance.starting_morale, 60)
 	assert_eq(balance.days_per_season, 15)
-	assert_eq(balance.wolf_threat_radius, 8)
+	assert_eq(balance.wolf_threat_radius, 10)
 
 func test_hard_preset_triggers_wolf_threat_on_night_1() -> void:
 	# Build a real sim with the hard preset and drive it through night 1.

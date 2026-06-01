@@ -12,6 +12,7 @@ func before_each() -> void:
 	balance.starting_wood = 20
 	balance.starting_fresh_food = 4
 	balance.starting_stored_food = 0
+	balance.starting_food = 4
 	balance.villager_count = 3
 	balance.starting_population_capacity = 3
 	balance.population_growth_enabled = true

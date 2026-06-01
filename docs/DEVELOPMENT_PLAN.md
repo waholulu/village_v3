@@ -3,7 +3,8 @@
 This document is the tactical plan for the current work cycle. For strategic
 guardrails and anti-features, see `ROADMAP.md`. For exact current runtime
 behavior, keep using `simulation_rules.md`; that file should be updated only
-as implementation phases land.
+as implementation phases land. For repeatable balance/headless checks, use
+`docs/headless_balance_pipeline.md` and `tools/headless_audit.ps1`.
 
 The product direction is:
 
@@ -18,6 +19,12 @@ through the first winter.
 
 The correction from the previous plan is important: do not throw away working
 map/pathfinding/AI code. Keep it, but cap what it is allowed to become.
+
+Current tuning workflow: run `.\tools\headless_audit.ps1 -Strict` after any
+default balance or simulation-rule change. The audit must keep the default
+preset winning on day 61, monitor anomalies at 0, negative task claims near
+zero, and cancellation bursts bounded. Hard preset audits are useful reports
+but hard is allowed to lose.
 
 One implementation principle matters more than the exact class names below:
 do not build a second simulation beside the current one. Prefer adapting
@@ -109,12 +116,10 @@ Do not add mood values, personal hunger values, family links, marriage, birth,
 aging, skill trees, or relationship networks. If existing hunger remains while
 migrating, treat it as legacy survival plumbing, not a design surface to grow.
 
-Migration rule: the final MVP should show 10 visible villager agents, matching
-the strategic `population` default. During the first migration phases, it is
-acceptable to keep the existing 3 visible agents while `population = 10` is
-tracked as a strategic resource. This avoids turning Phase 1 into a crowding,
-sprite, and pathing pass. The temporary mismatch must be called out in the HUD
-or debug overlay and removed before MVP lock.
+Migration rule: the current MVP target is 5 visible villager agents matching
+the strategic `population` default. Population, visible living villagers, and
+death tracking should stay in sync; the old 10/3 mismatch is no longer an
+accepted migration state.
 
 ### Jobs
 
@@ -326,7 +331,7 @@ Expected files / touch points:
 Rules:
 
 - Initial default state:
-  - population: 10
+  - population: 5
   - food: 40
   - wood: 25
   - security: 50
@@ -340,9 +345,8 @@ Rules:
   not contribute to work.
 - Map position and task state are implementation state, not extra gameplay
   fields.
-- Temporary migration allowance: the map may still show 3 visible agents while
-  the strategic state tracks population 10. Tests should make the distinction
-  explicit so it cannot become an accidental permanent rule.
+- Default start uses 5 visible villagers and strategic population 5. Births
+  and deaths should keep both counts aligned.
 
 Tests:
 
@@ -361,8 +365,8 @@ Done when:
 - Existing map/pathfinding tests still pass if they are touched.
 - `simulation_rules.md` gains a clearly marked section for implemented
   strategic state rules.
-- Any temporary visible-agent vs strategic-population mismatch is documented in
-  the debug overlay or HUD.
+- HUD and debug overlay show living population and dead count without treating
+  mismatch as a normal migration phase.
 
 ---
 

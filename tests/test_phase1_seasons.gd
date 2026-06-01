@@ -162,6 +162,7 @@ func test_save_load_preserves_food_split() -> void:
 	balance.starting_wood = 10
 	balance.starting_fresh_food = 4
 	balance.starting_stored_food = 7
+	balance.starting_food = 11
 	balance.villager_count = 1
 	balance.starting_population_capacity = 3
 	balance.day_duration_seconds = 10.0

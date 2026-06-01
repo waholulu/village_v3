@@ -34,6 +34,8 @@ Hybrid village survival roguelike:
 A task is done only if:
 - Game runs without errors.
 - Relevant tests pass.
+- Balance/simulation-rule changes pass `.\tools\headless_audit.ps1 -Strict`.
 - Debug overlay still works.
 - No unrelated files changed.
 - Changed rules documented in docs/simulation_rules.md.
+- New or changed tuning workflow is documented in docs/headless_balance_pipeline.md.

@@ -35,6 +35,8 @@ func pick_best_task(board: TaskBoard, store: ResourceStore, gt: GameTime, scorer
 		if s > best_score:
 			best_score = s
 			best_task = task
+	if best_score < 0.0:
+		return null
 	return best_task
 
 func set_task(task: Task) -> void:
