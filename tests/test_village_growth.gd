@@ -9,7 +9,9 @@ func before_each() -> void:
 	balance.starting_wood = 8
 	balance.starting_fresh_food = 0
 	balance.starting_stored_food = 4
+	balance.starting_food = 4
 	balance.villager_count = 3
+	balance.starting_population = 3
 	balance.starting_population_capacity = 3
 	balance.population_growth_enabled = true
 	balance.house_wood_cost = 8
@@ -21,6 +23,8 @@ func before_each() -> void:
 	pf.setup(wg)
 	sim = add_child_autoqfree(VillageSimulation.new())
 	sim.setup(balance, wg, pf)
+	for villager in sim.villagers:
+		villager.job = JobDefs.GUARD
 
 func test_build_task_generated_when_population_at_capacity_and_wood_available() -> void:
 	sim._run_construction_planner()
@@ -67,17 +71,21 @@ func test_population_grows_on_day_start_when_capacity_and_food_allow() -> void:
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 4)
 	assert_eq(sim.store.get_total_food(), 2)  # 4 stored - 2 consumed
+	assert_eq(sim.store.get_resource("population"), 4)
+	assert_false(sim.has_population_mismatch())
 
 func test_population_does_not_grow_without_capacity() -> void:
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 3)
 	assert_eq(sim.store.get_total_food(), 4)
+	assert_eq(sim.store.get_resource("population"), 3)
 
 func test_population_does_not_grow_without_food() -> void:
 	sim.population_capacity = 4
 	sim.store.consume_resource("stored_food", 4)
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 3)
+	assert_eq(sim.store.get_resource("population"), 3)
 
 func test_population_does_not_grow_when_population_growth_disabled() -> void:
 	sim._balance.population_growth_enabled = false
@@ -85,3 +93,4 @@ func test_population_does_not_grow_when_population_growth_disabled() -> void:
 	sim._on_day_started(2)
 	assert_eq(sim.villagers.size(), 3)
 	assert_eq(sim.store.get_total_food(), 4)
+	assert_eq(sim.store.get_resource("population"), 3)

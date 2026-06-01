@@ -42,6 +42,34 @@ func test_get_total_food_sums_fresh_and_stored() -> void:
 	store.setup(0, 3, 7)
 	assert_eq(store.get_total_food(), 10)
 
+func test_setting_food_reconciles_fresh_and_stored_buckets() -> void:
+	store.setup(0, 3, 7)
+	store.set_resource("food", 5)
+	assert_eq(store.get_resource("food"), 5)
+	assert_eq(store.get_total_food(), 5)
+	assert_eq(store.get_resource("fresh_food"), 3)
+	assert_eq(store.get_resource("stored_food"), 2)
+
+func test_add_fresh_food_updates_authoritative_food() -> void:
+	store.add_fresh_food(2)
+	assert_eq(store.get_resource("fresh_food"), 10)
+	assert_eq(store.get_resource("food"), 10)
+
+func test_consume_food_updates_authoritative_food_and_buckets() -> void:
+	store.setup(0, 2, 3)
+	var consumed: Dictionary = store.consume_food(4)
+	assert_eq(consumed["fresh"], 2)
+	assert_eq(consumed["stored"], 2)
+	assert_eq(consumed["total"], 4)
+	assert_eq(store.get_resource("food"), 1)
+	assert_eq(store.get_total_food(), 1)
+
+func test_spoil_fresh_food_updates_authoritative_food() -> void:
+	store.setup(0, 3, 7)
+	assert_eq(store.spoil_fresh_food(2), 2)
+	assert_eq(store.get_resource("fresh_food"), 1)
+	assert_eq(store.get_resource("food"), 8)
+
 func test_stock_changed_signal_emitted_on_add() -> void:
 	watch_signals(store)
 	store.add_resource("fresh_food", 2)

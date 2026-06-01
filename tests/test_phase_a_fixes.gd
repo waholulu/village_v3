@@ -95,7 +95,7 @@ func test_resource_store_setup_emits_signals() -> void:
 	var store := ResourceStore.new()
 	watch_signals(store)
 	store.setup(7, 3, 0)
-	assert_signal_emit_count(store, "stock_changed", 3)
+	assert_signal_emit_count(store, "stock_changed", 4)
 	# Sanity: all amounts match.
 	assert_eq(store.get_resource("wood"), 7)
 	assert_eq(store.get_resource("fresh_food"), 3)

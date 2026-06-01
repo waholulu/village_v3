@@ -9,6 +9,15 @@ func before_each() -> void:
 func test_night_consumes_food_per_villager() -> void:
 	sim.resolve_night()
 	assert_eq(sim.store.get_resource("fresh_food"), 5)
+	assert_eq(sim.store.get_resource("food"), 5)
+
+func test_night_feeding_uses_authoritative_food_pool() -> void:
+	sim.setup_for_test(10, 0, 3)
+	sim.store.set_resource("food", 3)
+	sim.resolve_night()
+	assert_eq(sim.hungry_villagers, 0)
+	assert_eq(sim.store.get_resource("food"), 0)
+	assert_eq(sim.store.get_total_food(), 0)
 
 func test_night_consumes_wood_for_campfire() -> void:
 	sim.resolve_night()

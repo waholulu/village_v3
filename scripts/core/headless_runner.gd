@@ -4,14 +4,12 @@ var _finished := false
 var _logger: ActionLogger
 
 func _init() -> void:
-	# Optional preset arg: `-- preset=hard` selects `data/balance_hard.json`.
-	# Anything else (or no arg) loads the default `data/balance.json`.
-	var preset_name: String = _parse_preset_arg()
+	var run_args := _parse_user_args()
+	var preset_name: String = run_args.get("preset", "")
+	var seed_override: int = int(run_args.get("seed", 0))
 	var balance_path: String = "res://data/balance.json"
 	if preset_name != "":
 		balance_path = "res://data/balance_%s.json" % preset_name
-
-	print("=== Headless Simulation Start (preset=%s) ===" % (preset_name if preset_name != "" else "default"))
 
 	# Run at 100× real time so the 60-day MVP loop completes quickly.
 	# time_scale scales _process delta, so GameTime and villager move timers
@@ -23,9 +21,15 @@ func _init() -> void:
 	if not balance.load_from_file(balance_path):
 		push_error("Preset not found: %s — falling back to default" % balance_path)
 		balance.load_from_file("res://data/balance.json")
+	if seed_override > 0:
+		balance.world_seed = seed_override
 	balance.day_duration_seconds = 2.0
 	balance.night_duration_seconds = 0.5
 	balance.villager_move_interval = 0.05
+	print("=== Headless Simulation Start (preset=%s seed=%d) ===" % [
+		preset_name if preset_name != "" else "default",
+		balance.world_seed,
+	])
 
 	var wg = WorldGenerator.new()
 	wg.generate_from_balance(balance)
@@ -115,16 +119,23 @@ func _init() -> void:
 
 	print("Simulating to year end (days_per_season=%d, win at day %d)..." % [balance.days_per_season, balance.days_per_season * 4 + 1])
 
-func _parse_preset_arg() -> String:
-	# Args after `--` are surfaced by get_cmdline_user_args(); we accept the
-	# form `preset=<name>` or a positional `<name>` if it's the only user arg.
+func _parse_user_args() -> Dictionary:
+	# Args after `--` are surfaced by get_cmdline_user_args(); we accept
+	# `preset=<name>`, `seed=<int>`, or a positional preset name when it's the
+	# only user arg.
 	var user_args := OS.get_cmdline_user_args()
+	var parsed := {
+		"preset": "",
+		"seed": 0,
+	}
 	for arg in user_args:
 		if arg.begins_with("preset="):
-			return arg.substr(7).strip_edges()
-	if user_args.size() == 1 and not user_args[0].is_empty():
-		return user_args[0].strip_edges()
-	return ""
+			parsed["preset"] = arg.substr(7).strip_edges()
+		elif arg.begins_with("seed="):
+			parsed["seed"] = int(arg.substr(5).strip_edges())
+	if parsed["preset"] == "" and user_args.size() == 1 and not user_args[0].is_empty() and not user_args[0].begins_with("seed="):
+		parsed["preset"] = user_args[0].strip_edges()
+	return parsed
 
 func _close_logger(sim: VillageSimulation, result: String) -> void:
 	if _logger == null:
@@ -133,6 +144,9 @@ func _close_logger(sim: VillageSimulation, result: String) -> void:
 	var villager_data: Array[Dictionary] = []
 	for v in sim.villagers:
 		villager_data.append({"name": v.name, "id": v.id, "hunger": v.hunger, "status": v.get_status_name()})
+	var starting_population: int = max(1, sim._balance.starting_population)
+	var dead_population: int = sim.get_dead_population()
+	var death_rate: float = float(dead_population) / float(starting_population)
 	_logger.log_event({
 		"event": "run_summary",
 		"result": result,
@@ -144,7 +158,9 @@ func _close_logger(sim: VillageSimulation, result: String) -> void:
 		"strategic_food": sim.store.get_resource("food"),
 		"security": sim.store.get_resource("security"),
 		"morale": sim.store.get_resource("morale"),
-		"visible_population": sim.villagers.size(),
+		"visible_population": sim.get_visible_population(),
+		"dead_population": dead_population,
+		"death_rate": snappedf(death_rate, 0.001),
 		"population_mismatch": sim.has_population_mismatch(),
 		"zero_streaks": {
 			"food": sim.zero_food_days,
@@ -160,7 +176,7 @@ func _close_logger(sim: VillageSimulation, result: String) -> void:
 
 func _print_snapshot(label: String, sim: VillageSimulation) -> void:
 	print(
-		"%s | day=%d phase=%s tick=%d time_left=%.2f strategic(pop=%d food=%d security=%d morale=%d zero=%d/%d/%d) legacy(wood=%d food=%d+%d visible=%d/%d hungry=%d campfire_out=%d) tasks(open=%d claimed=%d done=%d cancelled=%d) anomalies=%d" % [
+		"%s | day=%d phase=%s tick=%d time_left=%.2f strategic(pop=%d food=%d security=%d morale=%d zero=%d/%d/%d) legacy(wood=%d food=%d+%d visible=%d/%d dead=%d hungry=%d campfire_out=%d) tasks(open=%d claimed=%d done=%d cancelled=%d) anomalies=%d" % [
 			label,
 			sim.game_time.day,
 			sim.game_time.get_phase_name(),
@@ -176,8 +192,9 @@ func _print_snapshot(label: String, sim: VillageSimulation) -> void:
 			sim.store.get_resource("wood"),
 			sim.store.get_resource("fresh_food"),
 			sim.store.get_resource("stored_food"),
-			sim.villagers.size(),
+			sim.get_visible_population(),
 			sim.population_capacity,
+			sim.get_dead_population(),
 			sim.hungry_villagers,
 			sim.campfire_out_nights,
 			sim.board.count_by_status(Task.Status.OPEN),

@@ -26,7 +26,7 @@ The target first complete version is:
 - 5 player-facing resources
 - 5 jobs
 - 5 weekly policies
-- 10 visible villagers by MVP lock
+- 5 visible villagers by MVP lock
 - 25 event cards
 - 60-day survival goal
 - one readable village map
@@ -99,9 +99,9 @@ the MVP again.
     code branches on it.
 14. **No unrelated rewrites.** Existing map/pathfinding code may be adapted to
     the new loop, but not refactored for its own sake.
-15. **Temporary population mismatch is allowed only during migration.** Phase
-    1 may track `population = 10` while the map still shows 3 agents, but MVP
-    lock requires 10 visible villagers or an explicit design revision.
+15. **Population must stay internally consistent.** Shipped defaults should keep
+    strategic `population`, living visible villagers, and death tracking in
+    sync; temporary mismatch is a bug, not an accepted migration state.
 
 ---
 
@@ -144,7 +144,7 @@ jobs in the MVP.
 
 ## Target MVP Loop
 
-1. Start with 10 villagers, five resources, and one small village map.
+1. Start with 5 villagers, five resources, and one small village map.
 2. Choose one weekly policy.
 3. Villagers automatically execute simple work on the map.
 4. Resolve each day:
@@ -180,10 +180,9 @@ ahead of implementation.
 Create a deterministic 60-day strategic state with resources, seasons,
 villagers, win condition, and loss streaks.
 
-Done when: the strategic state is integrated with the existing simulation and
-can be tested headlessly while preserving the existing map simulation. A
-temporary 3-visible-agent / 10-population mismatch is acceptable if documented
-and tested.
+Done when: the strategic state is integrated with the existing simulation, can
+be tested headlessly while preserving the existing map simulation, and keeps
+strategic population aligned with living visible villagers.
 
 ### Phase 2 - Policy To Task Bridge
 

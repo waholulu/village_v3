@@ -12,7 +12,7 @@ func _setup_world_sim(balance: BalanceData) -> VillageSimulation:
 func test_initial_strategic_state_matches_mvp_defaults() -> void:
 	var balance := BalanceData.new()
 	var sim := _setup_world_sim(balance)
-	assert_eq(sim.store.get_resource("population"), 10)
+	assert_eq(sim.store.get_resource("population"), 5)
 	assert_eq(sim.store.get_resource("food"), 40)
 	assert_eq(sim.store.get_resource("wood"), 25)
 	assert_eq(sim.store.get_resource("security"), 50)
@@ -20,8 +20,8 @@ func test_initial_strategic_state_matches_mvp_defaults() -> void:
 	assert_eq(sim.game_time.day, 1)
 	assert_eq(sim.get_days_to_win(), 60)
 	assert_eq(sim.game_time.current_season, GameTime.Season.SPRING)
-	assert_eq(sim.get_visible_population(), 3)
-	assert_true(sim.has_population_mismatch())
+	assert_eq(sim.get_visible_population(), 5)
+	assert_false(sim.has_population_mismatch())
 
 func test_season_ranges_are_15_days_each() -> void:
 	var gt: GameTime = add_child_autoqfree(GameTime.new())
@@ -118,3 +118,26 @@ func test_dead_villager_releases_existing_task() -> void:
 	sim._tick_villagers(1.0)
 	assert_eq(sim.villagers[0].current_task_id, -1)
 	assert_eq(task.status, Task.Status.CANCELLED)
+
+func test_starvation_kills_one_villager_without_ending_run_when_others_live() -> void:
+	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
+	sim.setup_for_test(25, 40, 3)
+	sim.store.consume_resource("fresh_food", 999)
+	sim.villagers[0].hunger = sim._balance.max_hunger - 1
+	watch_signals(sim)
+	sim.resolve_night()
+	assert_eq(sim.villagers[0].status, VillagerAgent.Status.DEAD)
+	assert_eq(sim.store.get_resource("population"), 2)
+	assert_eq(sim.get_visible_population(), 2)
+	assert_eq(get_signal_emit_count(sim, "game_lost"), 0)
+
+func test_last_starving_villager_still_loses_run() -> void:
+	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
+	sim.setup_for_test(25, 40, 1)
+	sim.store.consume_resource("fresh_food", 999)
+	sim.villagers[0].hunger = sim._balance.max_hunger - 1
+	watch_signals(sim)
+	sim.resolve_night()
+	assert_eq(sim.villagers[0].status, VillagerAgent.Status.DEAD)
+	assert_eq(sim.store.get_resource("population"), 0)
+	assert_signal_emitted(sim, "game_lost")

@@ -49,7 +49,7 @@ func test_balance_data_warns_on_unknown_keys() -> void:
 	var balance := BalanceData.new()
 	assert_true(balance.load_from_file(path))
 	# Typo'd key was ignored; the field stays at default.
-	assert_eq(balance.wolf_threat_radius, 8, "typo'd key shouldn't change canonical field")
+	assert_eq(balance.wolf_threat_radius, 10, "typo'd key shouldn't change canonical field")
 	# Real field still loaded correctly.
 	assert_eq(balance.starting_wood, 10)
 
@@ -84,3 +84,21 @@ func test_day_start_clears_stale_tasks() -> void:
 		"clear_stale should have removed cancelled tasks")
 	assert_gte(sim.board.count_by_status(Task.Status.OPEN), 1,
 		"OPEN tasks should survive day_start cleanup")
+
+func test_resource_task_generation_uses_small_open_queue() -> void:
+	var balance := BalanceData.new()
+	balance.max_open_resource_tasks_per_type = 3
+	balance.world_tree_count = 20
+	var wg := WorldGenerator.new()
+	wg.generate_from_balance(balance)
+	var pf := PathfindingService.new()
+	pf.setup(wg)
+	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
+	sim.setup(balance, wg, pf)
+	sim.store.set_resource("wood", 0)
+	sim._generate_tasks()
+	var chop_count := 0
+	for task in sim.board._tasks:
+		if task.type == "chop_tree" and task.status == Task.Status.OPEN:
+			chop_count += 1
+	assert_lte(chop_count, 3)

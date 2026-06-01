@@ -11,12 +11,14 @@ For higher-level project framing and the multi-phase outline, see
 ## Resources
 
 - Strategic MVP resources now exist in `ResourceStore`: `population`, `food`,
-  `wood`, `security`, and `morale`. Default strategic start is population 10,
+  `wood`, `security`, and `morale`. Default strategic start is population 5,
   food 40, wood 25, security 50, morale 60.
 - Resource values clamp at zero on direct set/add/consume paths.
-- During migration, legacy `fresh_food` and `stored_food` still exist for the
-  current hunger, gathering, spoilage, and save/load plumbing. They are not
-  additional player-facing MVP resources.
+- `food` is the authoritative food total. `fresh_food` and `stored_food` are
+  compatibility buckets for spoilage, logs, and save/load; their sum is kept
+  equal to `food` by `ResourceStore`.
+- The default preset starts with `fresh_food = 4`; `stored_food` is reconciled
+  from the authoritative starting `food` total.
 - `wildlife_food` no longer exists — deer are full `WildlifeAgent` entities
   with positions, not an integer counter.
 
@@ -31,16 +33,58 @@ For higher-level project framing and the multi-phase outline, see
   - Winter: days 46-60
 - Win: after resolving day 60, the next day transition emits `game_won`.
 - Loss: `population <= 0` emits `game_lost`.
+- Default preset starts with 5 strategic population, 5 living villagers on the
+  map, and `starting_population_capacity = 5`.
 - Loss streak counters track `food`, `morale`, and `security` separately.
   If any stays at 0 for 3 consecutive daily strategic resolutions, the run
   is lost. A resource rising above 0 resets only its own streak.
-- Temporary migration state: strategic `population` starts at 10 while the map
-  still spawns 3 visible villager agents. HUD and debug overlay call this out;
-  it must be removed before MVP lock.
 - Villager agents now expose MVP status values: `healthy`, `tired`,
   `injured`, `sick`, and `dead`. New villagers start `healthy`.
-- `dead` villagers remain in the villager list but cannot claim, receive, or
-  execute work tasks.
+- `injured`, `sick`, and `dead` villagers cannot claim, receive, execute, or
+  contribute work. `tired` villagers can work at reduced strategic output.
+- `dead` villagers remain in the villager list.
+- When population growth is enabled, births increase both the living villager
+  list and strategic `population`, so the default simulation no longer treats
+  visible/strategic population mismatch as normal.
+
+## Policies And Jobs
+
+- Phase 2 policy/job bridge is now partially implemented. The active policy
+  defaults to `food_first`.
+- Policy changes are accepted only on days 1, 8, 15, 22, 29, 36, 43, 50,
+  and 57. Invalid policy ids are rejected, and non-boundary attempts keep the
+  previous policy.
+- Implemented policies:
+  - `food_first`: boosts food output and food task scores.
+  - `wood_first`: boosts wood output and chop-tree task scores.
+  - `defense_first`: boosts security output and guard / defense task scores.
+  - `rest_first`: boosts recovery output and tend-villager task scores.
+  - `explore_forest`: boosts hunter / forest food and wood output.
+- Visible villagers receive deterministic MVP jobs in this order, repeating:
+  farmer, hunter, woodcutter, guard, herbalist.
+- Job effects currently apply to strategic daily output and task scoring:
+  - Farmer: produces food and prefers `gather_food`.
+  - Hunter: produces food, prefers `hunt_deer`, and can become injured from a
+    deterministic daily risk roll.
+  - Woodcutter: produces wood and prefers `chop_tree`.
+  - Guard: produces security and prefers guard / defense tasks.
+  - Herbalist: can recover one injured or sick villager with a deterministic
+    daily roll.
+- Each day start resolves the Phase 2 strategic bridge before loss-streak
+  checks: apply visible-villager job output modified by status and policy.
+  Food is consumed by the nightly per-villager hunger pass, not by a second
+  abstract daily drain.
+- The daily bridge uses deterministic hash rolls based on `world_seed`, day,
+  villager id, and roll tag. It does not use global random state.
+- Resource tasks now also update the matching strategic resource:
+  `gather_food` and `hunt_deer` add strategic `food`, and `chop_tree` adds
+  strategic `wood`.
+- Successful daily food jobs add their full food output to `stored_food`, which
+  also increases authoritative `food`. Map harvesting and hunting add
+  `fresh_food`, which also increases authoritative `food`.
+- This bridge is still a migration layer: fresh/stored buckets remain active
+  for spoilage flavor and backwards-compatible saves, but they no longer form a
+  second food economy.
 
 ## World
 
@@ -79,10 +123,22 @@ balance):
 - `build_house`, `build_watchtower`, `build_fence`, `build_storage`:
   created by `ConstructionPlanner` at day_start. Scored as flat bonuses
   (25 / 20 / 15 / 12) minus distance × 0.5.
-- `gather_food`: created per BERRY_BUSH when `food < food_low_threshold`.
-- `chop_tree`: created per TREE when `wood < wood_low_threshold`.
-- `hunt_deer`: created when a deer is within `deer_hunt_radius` of HUT,
-  regardless of food level. Cancelled at every day_start (deer move daily).
+- `gather_food`: created per nearby BERRY_BUSH when
+  `food < food_low_threshold`, capped by
+  `max_open_resource_tasks_per_type` active gather tasks.
+- `chop_tree`: created per nearby TREE when `wood < wood_low_threshold`,
+  capped by `max_open_resource_tasks_per_type` active chop tasks.
+- `hunt_deer`: created when `food < food_surplus_threshold` and a deer is
+  within `deer_hunt_radius` of HUT (default preset: 40). Existing OPEN hunt
+  tasks are cancelled only when their target deer is no longer at that tile,
+  the deer has moved outside the hunt radius, the approach tile becomes
+  invalid, or food reaches `food_surplus_threshold`. CLAIMED hunters finish
+  their current run; if the deer is gone when they arrive, the hunt resolves
+  as `deer_escaped`.
+- `guard_watch`: created by `defense_first` while security is below 60.
+  Completed guard work adds strategic security.
+- `tend_villager`: created by `rest_first` when any villager is injured or
+  sick. Completed herbalist work can recover one villager and add morale.
 
 **No more `return_home` or `refuel_campfire` tasks.** Those were
 placeholders removed in the Phase C cleanup. Codex / Claude must NOT
@@ -92,10 +148,13 @@ implication (no second-tier scheduling).
 ### Asymmetric thresholds
 
 - Create gather_food when `food < food_low_threshold` (default 6).
-- Cancel open gather_food when `food >= food_surplus_threshold` (default 12).
+- Cancel open gather_food when `food >= food_surplus_threshold` (default 20).
 - Same pattern for chop_tree with `wood_low/surplus_threshold`.
 - The gap between low and surplus lets idle villagers consume existing
   OPEN tasks instead of going idle the moment stock crosses the floor.
+- Resource task generation considers nearest resources first and keeps at most
+  `max_open_resource_tasks_per_type` active tasks per resource type (default
+  12) so the board does not flood with the entire map's trees/bushes.
 
 ### Task lifecycle
 
@@ -115,8 +174,9 @@ implication (no second-tier scheduling).
 - Distance penalty in scoring uses `task.approach_tile`, not
   `target_tile`. For non-walkable targets the approach tile is where the
   villager actually goes.
-- `pick_best_task` returns null when there are no open tasks — villager
-  stays IDLE that tick.
+- `pick_best_task` returns null when there are no open tasks, or when every
+  available task has a negative score — villager stays IDLE that tick.
+  Zero-score tasks remain claimable.
 - `clear_task()` resets `state`, `current_task_id`, `_path`, and
   `_move_timer` — no transient state leaks across tasks.
 
@@ -129,7 +189,8 @@ implication (no second-tier scheduling).
 - Spawn near BERRY_BUSHes after day 1 (`deer_spawn_per_day` per eligible
   day, capped by `deer_max_count`).
 - Move 1 random walkable neighbor per day_start.
-- Hunted via `hunt_deer` task; gives `food_per_deer` food.
+- Hunted via `hunt_deer` task; gives `food_per_deer` food (default preset:
+  3 before job/status/policy modifiers).
 - Despawn: deer have no max age (only wolves do).
 
 ### Wolves
@@ -151,8 +212,9 @@ implication (no second-tier scheduling).
   by day + threat_count + village size), applies
   `wolf_hunger_disruption` hunger after mitigation, increments
   `_wolf_threat_count`.
-- **Starvation re-checked after wolf damage** so a wolf-pushed overflow
-  ends the game immediately, not next night.
+- **Starvation re-checked after wolf damage** so a wolf-pushed overflow can
+  kill that villager immediately. The run is only lost if that death reduces
+  strategic population to 0 (or other existing loss streak rules later fire).
 
 ### Regrowth
 
@@ -186,16 +248,18 @@ Four buildings, data-driven via `BuildingDefs.BUILDINGS`:
 
 In `_on_night_started`:
 
-1. `_resolve_hunger`: each villager eats `food_consumed_per_villager_per_night`
-   if available; if fed, hunger -= 1 (clamped 0); else hunger += 1. If any
-   villager's hunger >= `max_hunger`, emit `game_lost("A villager starved")`.
+1. `_resolve_hunger`: each villager eats
+   `food_consumed_per_villager_per_night` from authoritative `food`, drawing
+   fresh food before stored food. If fed, hunger -= 1 (clamped 0); else hunger
+   += 1. If a villager's hunger reaches `max_hunger`, that villager is marked
+   `dead`, released from work, and strategic `population` decreases by 1.
 2. Campfire wood consumption: `wood_consumed_by_campfire_per_night`.
    If shortfall, `campfire_out_nights += 1`. If `campfire_out_nights >=
-   max_campfire_out_nights`, emit `game_lost("Campfire out for N
+   max_campfire_out_nights` (default preset: 3), emit `game_lost("Campfire out for N
    consecutive nights")`.
 3. `_apply_food_spoilage` against storage capacity.
 4. `nature.check_wolf_threat` → if true, `_apply_wolf_disruption`
-   (which re-checks starvation after damage).
+   (which re-checks starvation after damage and may kill one villager).
 
 ## Difficulty presets
 
@@ -209,8 +273,9 @@ In `_on_night_started`:
 ## Save / load
 
 - `SaveManager.save()` writes the full current grid as `tiles`, plus
-  legacy food fields, grouped strategic resources, zero-resource streaks,
-  day/phase, villager positions + hunger + names + status, and
+  legacy food fields, grouped strategic resources, active policy,
+  zero-resource streaks, day/phase, villager positions + hunger + names +
+  job + status, and
   `_wolf_threat_count`. **No tasks, no buildings list, no derived
   building counters** — all reconstructed from the grid.
 - `load_into()`:
@@ -218,13 +283,14 @@ In `_on_night_started`:
     `store.setup_strategic()`; both emit `stock_changed` so HUD refreshes.
   - Restores `zero_food_days`, `zero_morale_days`, and
     `zero_security_days`.
+  - Restores active policy.
   - Restores grid via `world_gen.set_tile()` for each cell.
   - Recomputes `_fence_count` / `_watchtower_count` / `_storage_count`
     from tile counts.
   - Drops the task board (`sim.board = TaskBoard.new()`); tasks
     regenerate next tick.
   - Resets every villager to IDLE with empty path; keeps position +
-    hunger + name + id + status.
+    hunger + name + id + job + status.
   - Rebuilds pathfinding from scratch (`pf.setup(wg)`).
   - Emits `tile_changed` for every cell so renderers redraw.
 - No schema version field. Format is still mutating; pre-Phase-B saves
@@ -263,11 +329,26 @@ reason), `built`, `construction_planned`, `wolf_threat`,
 `wolf_despawned`, `run_summary`. The logger is never above 50 lines —
 do not grow it.
 
+## Headless Balance Audit
+
+Run `tools/headless_audit.ps1` after balance or simulation-rule changes. It
+executes the deterministic headless runner, parses the raw Godot log plus JSONL
+action log, and emits `.godot/headless_audit/<run>/audit_report.json` with
+result, resource ranges, negative task claims, cancellation bursts, death
+counts/rates, population mismatch, and gate results. Default preset audits also
+run a fixed 10-seed sweep (`4312..4321`) and gate on both win count and
+winning average death rate. `HeadlessRunner` accepts `seed=<int>` on the CLI
+for single-seed reproduction. See `docs/headless_balance_pipeline.md` for the
+repeatable tuning loop.
+
 ## Debug snapshot
 
 - F3 in live play opens DebugOverlay (read-only view of monitor +
   per-villager state).
-- HUD shows day/phase, wood, food, population, hungry count,
-  campfire-out streak, nature counts, task counts, monitor status.
+- Left click selects a tile for a read-only inspector panel showing terrain,
+  occupants, wildlife, and task relations. Clicking HUD panels does not select
+  world tiles, and clicking outside the map clears selection.
+- HUD shows day/phase, wood, food, population with dead count, security,
+  morale, nature counts, task counts, monitor status, and the tile inspector.
 - Both HUD and DebugOverlay are pure signal-driven — no per-frame
   polling of simulation state.

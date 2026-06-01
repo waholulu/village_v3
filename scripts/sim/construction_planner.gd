@@ -37,7 +37,7 @@ func _condition_met(key: String, sim: VillageSimulation) -> bool:
 	match key:
 		"house":
 			return sim._balance.population_growth_enabled \
-				and sim.villagers.size() >= sim.population_capacity
+				and sim.get_living_population() >= sim.population_capacity
 		"fence":
 			# Wait for wolves to prove they're a real threat before fortifying —
 			# avoids wasting wood on perimeter defense when the campfire never
@@ -46,9 +46,9 @@ func _condition_met(key: String, sim: VillageSimulation) -> bool:
 		"watchtower":
 			return sim.game_time != null and sim.game_time.day >= 4 and sim._watchtower_count == 0
 		"storage":
-			# Build storage when food stock is plentiful; storage increases
-			# stored_food capacity in Phase 2+.
-			return sim.store.get_total_food() >= sim._balance.food_surplus_threshold \
+			# Storage protects fresh surplus; stable stored food already lives in
+			# the unified food pool and should not force an opening build.
+			return sim.store.get_resource("fresh_food") >= sim._balance.food_surplus_threshold \
 				and sim._storage_count < BuildingDefs.BUILDINGS["storage"].max_count
 	return false
 

@@ -34,6 +34,32 @@ var build_sites: Array[Vector2i] = [
 ]
 var last_seed: int = 4312
 
+static func get_tile_type_name(tile_type: int) -> String:
+	match tile_type:
+		TileType.GRASS:
+			return "Grass"
+		TileType.TREE:
+			return "Tree"
+		TileType.BERRY_BUSH:
+			return "Berry Bush"
+		TileType.HUT:
+			return "Hut"
+		TileType.CAMPFIRE:
+			return "Campfire"
+		TileType.BLOCKED:
+			return "Blocked"
+		TileType.BUILD_SITE:
+			return "Build Site"
+		TileType.HOUSE:
+			return "House"
+		TileType.FENCE:
+			return "Fence"
+		TileType.WATCHTOWER:
+			return "Watchtower"
+		TileType.STORAGE:
+			return "Storage"
+	return "Unknown"
+
 func generate_fixed(seed: int = 4312, tree_count: int = 32, berry_count: int = 18, blocked_count: int = 18) -> void:
 	last_seed = seed
 	_fill_grass()

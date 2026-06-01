@@ -34,6 +34,7 @@ func _build_debug_text() -> String:
 	lines.append("=== DEBUG (F3) ===")
 	lines.append("Day: %d / %d  %s" % [snapshot["day"], snapshot["days_to_win"], snapshot.get("season", "Spring")])
 	lines.append("Phase: %s" % snapshot["phase"])
+	lines.append("Policy: %s" % snapshot["active_policy_name"])
 	lines.append("Tick: %d" % snapshot["tick"])
 	lines.append("Time left: %.1fs" % snapshot["time_left"])
 	lines.append("")
@@ -42,8 +43,7 @@ func _build_debug_text() -> String:
 	lines.append("Security: %d" % snapshot["security"])
 	lines.append("Morale: %d" % snapshot["morale"])
 	lines.append("Population: %d / %d" % [snapshot["population"], snapshot["population_capacity"]])
-	if snapshot["population_mismatch"]:
-		lines.append("Visible agents: %d (temporary migration mismatch)" % snapshot["visible_population"])
+	lines.append("Living / dead: %d / %d" % [snapshot["visible_population"], snapshot["dead_population"]])
 	lines.append("Legacy food: %d+%d (total %d)" % [snapshot["fresh_food"], snapshot["stored_food"], snapshot["total_food"]])
 	lines.append("Hungry: %d" % snapshot["hungry"])
 	lines.append("Campfire out: %d" % snapshot["campfire_out"])
@@ -91,6 +91,7 @@ func _build_debug_text() -> String:
 			if t:
 				task_info = "%s@(%d,%d)" % [t.type, t.target_tile.x, t.target_tile.y]
 		lines.append("%s: %s" % [v.name, v.get_state_name()])
+		lines.append("  job: %s" % JobDefs.get_display_name(v.job))
 		lines.append("  status: %s" % v.get_status_name())
 		lines.append("  task: %s" % task_info)
 		lines.append("  pos: (%d,%d)" % [v.tile_position.x, v.tile_position.y])

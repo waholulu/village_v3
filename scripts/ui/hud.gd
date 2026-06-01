@@ -14,6 +14,9 @@ extends CanvasLayer
 @onready var _btn_speed_1: Button = $Panel/BtnSpeed1
 @onready var _btn_speed_2: Button = $Panel/BtnSpeed2
 @onready var _btn_speed_4: Button = $Panel/BtnSpeed4
+@onready var _inspector_panel: Panel = $InspectorPanel
+@onready var _lbl_tile_title: Label = $InspectorPanel/LblTileTitle
+@onready var _lbl_tile_body: Label = $InspectorPanel/LblTileBody
 
 var _sim: VillageSimulation
 
@@ -49,6 +52,7 @@ func setup(sim: VillageSimulation) -> void:
 	_refresh_tasks_label()
 	_on_wildlife_changed(sim.nature.get_animals_as_dicts() if sim.nature else [])
 	_on_monitor_anomalies_changed(sim.monitor_anomalies)
+	clear_tile_inspector()
 
 func _on_stock_changed(resource_name: String, _amount: int) -> void:
 	if resource_name == "wood":
@@ -91,10 +95,8 @@ func _on_hunger_changed(_hungry_count: int) -> void:
 func _refresh_population_label() -> void:
 	if _sim == null:
 		return
-	if _sim.has_population_mismatch():
-		_lbl_population.text = "Pop: %d (visible %d)" % [_sim.get_strategic_population(), _sim.get_visible_population()]
-	else:
-		_lbl_population.text = "Pop: %d/%d" % [_sim.get_strategic_population(), _sim.population_capacity]
+	var dead_count := _sim.get_dead_population()
+	_lbl_population.text = "Pop: %d/%d  D%d" % [_sim.get_strategic_population(), _sim.population_capacity, dead_count]
 
 func _on_wildlife_changed(animals: Array) -> void:
 	var deer := 0
@@ -115,7 +117,7 @@ func _on_monitor_anomalies_changed(anomalies: Array[Dictionary]) -> void:
 	if _sim == null:
 		_lbl_ai.text = ""
 		return
-	var food_needed: int = _sim.villagers.size() * _sim._balance.food_consumed_per_villager_per_night
+	var food_needed: int = _sim.get_living_population() * _sim._balance.food_consumed_per_villager_per_night
 	var wood_needed: int = _sim._balance.wood_consumed_by_campfire_per_night
 	var food_short: int = maxi(0, food_needed - _sim.store.get_total_food())
 	var wood_short: int = maxi(0, wood_needed - _sim.store.get_resource("wood"))
@@ -146,3 +148,51 @@ func _on_speed_changed(speed: float) -> void:
 	_btn_speed_1.disabled = is_equal_approx(speed, 1.0)
 	_btn_speed_2.disabled = is_equal_approx(speed, 2.0)
 	_btn_speed_4.disabled = is_equal_approx(speed, 4.0)
+
+func update_tile_inspector(info: Dictionary) -> void:
+	if info.is_empty() or not info.get("in_bounds", false):
+		clear_tile_inspector()
+		return
+	_lbl_tile_title.text = "Tile (%d, %d) — %s" % [info["x"], info["y"], info["tile_name"]]
+	var villagers_text := _format_tile_entries(info.get("villagers", []), "name", "None")
+	var animals_text := _format_tile_entries(info.get("animals", []), "kind_name", "None")
+	var tasks_text := _format_task_entries(info.get("tasks", []))
+	_lbl_tile_body.text = "Kind: %s | Walkable: %s\nVillagers: %s\nAnimals: %s\nTasks: %s" % [
+		info.get("feature_label", "Unknown"),
+		"Yes" if info.get("walkable", false) else "No",
+		villagers_text,
+		animals_text,
+		tasks_text,
+	]
+
+func clear_tile_inspector() -> void:
+	_lbl_tile_title.text = "Tile Inspector"
+	_lbl_tile_body.text = "Click a tile to inspect its terrain, occupants, and tasks."
+
+func is_screen_point_over_ui(screen_pos: Vector2) -> bool:
+	for control in [_get_main_panel(), _inspector_panel]:
+		if control != null and control.visible and control.get_global_rect().has_point(screen_pos):
+			return true
+	return false
+
+func _format_tile_entries(entries: Array, label_key: String, fallback: String) -> String:
+	if entries.is_empty():
+		return fallback
+	var parts: Array[String] = []
+	for entry in entries:
+		var label := String(entry.get(label_key, "Unknown"))
+		if entry.has("status"):
+			label += " (%s)" % entry.get("status", "")
+		parts.append(label)
+	return ", ".join(parts)
+
+func _format_task_entries(tasks: Array) -> String:
+	if tasks.is_empty():
+		return "None"
+	var parts: Array[String] = []
+	for task in tasks:
+		parts.append("%s [%s %s]" % [task.get("type", "task"), task.get("status", "open"), task.get("relation", "target")])
+	return ", ".join(parts)
+
+func _get_main_panel() -> Panel:
+	return $Panel

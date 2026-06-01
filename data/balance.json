@@ -2,34 +2,37 @@
   "starting_wood": 25,
   "starting_fresh_food": 4,
   "starting_stored_food": 12,
-  "villager_count": 3,
-  "starting_population": 10,
+  "villager_count": 5,
+  "starting_population": 5,
   "starting_food": 40,
   "starting_security": 50,
   "starting_morale": 60,
   "zero_resource_loss_days": 3,
   "days_per_season": 15,
+  "strategic_food_consumed_per_day": 8,
+  "hunter_injury_chance_percent": 35,
+  "herbalist_recovery_chance_percent": 30,
 
   "wood_per_tree": 3,
   "food_per_bush": 2,
 
-  "food_consumed_per_villager_per_night": 1,
-  "wood_consumed_by_campfire_per_night": 2,
+  "food_consumed_per_villager_per_night": 2,
+  "wood_consumed_by_campfire_per_night": 3,
   "fresh_food_spoilage_per_night": 1,
-  "winter_wood_consumption_multiplier": 1.5,
+  "winter_wood_consumption_multiplier": 2.0,
 
   "food_low_threshold": 6,
   "wood_low_threshold": 6,
-  "food_surplus_threshold": 12,
+  "food_surplus_threshold": 20,
   "wood_surplus_threshold": 12,
 
   "day_duration_seconds": 10.0,
   "night_duration_seconds": 5.0,
 
-  "max_campfire_out_nights": 2,
+  "max_campfire_out_nights": 3,
   "villager_move_interval": 0.5,
 
-  "starting_population_capacity": 3,
+  "starting_population_capacity": 5,
   "population_growth_enabled": false,
   "house_wood_cost": 8,
   "population_capacity_per_house": 2,
@@ -55,6 +58,7 @@
   "monitor_min_food_nights": 1,
   "monitor_min_wood_nights": 1,
   "monitor_task_backlog_warning": 80,
+  "max_open_resource_tasks_per_type": 12,
 
   "world_noise_frequency": 0.08,
   "world_noise_forest_threshold": 0.30,
@@ -71,8 +75,8 @@
   "wolf_spawn_count": 1,
   "wolf_max_count": 3,
   "wolf_max_age_days": 5,
-  "wolf_threat_radius": 8,
-  "wolf_hunger_disruption": 1,
+  "wolf_threat_radius": 10,
+  "wolf_hunger_disruption": 3,
 
   "fence_wolf_damage_reduction": 0.10
 }

@@ -3,16 +3,17 @@
 One-page reference for Tiny Campfire Village. For the strategic direction
 (phases, anti-features, guardrails) see `ROADMAP.md`. For exact runtime
 behavior see `docs/simulation_rules.md`. For architecture / signal flow
-see `CLAUDE.md`.
+see `CLAUDE.md`. For repeatable headless tuning, see
+`docs/headless_balance_pipeline.md`.
 
 ## Goal
 
 A small, observable, deterministic Godot 4 village survival MVP:
 
-- Strategic village state starts with population 10, food 40, wood 25,
+- Strategic village state starts with population 5, food 40, wood 25,
   security 50, and morale 60.
-- 3 visible villagers remain autonomous as the execution layer during the
-  transition to the policy/event MVP.
+- 5 visible villagers remain autonomous as the execution layer for the
+  policy/event MVP, matching strategic population at default start.
 - Survive through day 60 to win. The win signal fires after the day 60
   resolution, on day 61.
 - Lose when strategic population reaches 0, or when food, morale, or
@@ -45,17 +46,24 @@ The exact commands live in `CLAUDE.md`. Common ones:
 # Hard preset headless
 & "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd -- preset=hard
 
+# Repeatable default balance audit with gates
+.\tools\headless_audit.ps1 -Strict
+
+# Hard preset audit report (hard is allowed to lose)
+.\tools\headless_audit.ps1 -Preset hard
+
 # Live play
 & "E:\godot\Godot_v4.6.3-stable_win64.exe" --path "E:\godot\tiny-campfire-village"
 ```
 
 After adding any new `.gd` with a `class_name`, run `--import` first.
 
-## Test status
+## Test And Audit Status
 
-Latest run: **219 GUT tests, all passing**. Default headless completes
-with a day 61 win and 0 monitor anomalies. Every simulation rule change must
-land with a focused test — see Phase A/B/C/D regression tests
+Latest run: **243 GUT tests, all passing**. Default strict headless audit
+passes with a day 61 win, 0 monitor anomalies, 10/10 sweep wins, and winning
+average death rate `0.22`. Every simulation rule change must land with a
+focused test and a strict audit pass — see Phase A/B/C/D regression tests
 (`tests/test_phase_*_*.gd`) as templates.
 
 ## Controls (live play)
@@ -66,13 +74,14 @@ land with a focused test — see Phase A/B/C/D regression tests
   return to IDLE; resource HUD refreshes via signal)
 - WASD / arrow keys — pan the map camera
 - Right mouse drag or middle mouse drag — pan the map camera
+- Left mouse click — inspect a map tile
 - HUD speed buttons or number keys 1/2/3 — set simulation speed to 1x/2x/4x
 
 ## Directory map
 
 - `data/` — balance JSON (default + presets)
-- `docs/` — this file, `simulation_rules.md`, `ROADMAP.md`,
-  `DEVELOPMENT_PLAN.md`
+- `docs/` — this file, `simulation_rules.md`,
+  `headless_balance_pipeline.md`, `ROADMAP.md`, `DEVELOPMENT_PLAN.md`
 - `scenes/` — `main`, `ui`, `world`
 - `scripts/core/` — balance, time, resources, save/load, headless
   runner, action logger, global events
@@ -127,15 +136,15 @@ set_point_walkable → tile_changed.emit → store.add_resource) and the
 
 | Key | Value |
 |---|---|
-| starting_population / starting_food | 10 / 40 |
+| starting_population / starting_food | 5 / 40 |
 | starting_wood / starting_security / starting_morale | 25 / 50 / 60 |
-| visible villagers / strategic run length | 3 / 60 days |
+| visible villagers / strategic run length | 5 / 60 days |
 | wood_per_tree / food_per_bush | 3 / 2 |
 | food / wood low_threshold | 6 / 6 |
-| food / wood surplus_threshold | 12 / 12 |
-| max_campfire_out_nights | 2 |
+| food / wood surplus_threshold | 20 / 12 |
+| max_campfire_out_nights | 3 |
 | max_hunger | 3 |
-| wolf_threat_radius | 8 |
+| wolf_threat_radius | 10 |
 
 Full schema in `scripts/core/balance_data.gd`.
 
@@ -161,6 +170,7 @@ are binding.
   graph is wrong.
 - Balance is the only knob for behavior tuning — no magic numbers in
   `.gd`.
-- Headless run + tests must stay green between commits.
+- Headless strict audit + tests must stay green between commits when default
+  balance or simulation rules change.
 - When updating any sim rule, also update `simulation_rules.md` in the
   same commit. Codex / Claude trust that doc.

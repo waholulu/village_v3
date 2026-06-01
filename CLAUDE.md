@@ -24,6 +24,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 & "E:\godot\Godot_v4.6.3-stable_win64_console.exe" --headless --path "E:\godot\tiny-campfire-village" -s res://scripts/core/headless_runner.gd
 ```
 
+**Run repeatable headless balance audit (required for default balance / simulation-rule changes):**
+```powershell
+.\tools\headless_audit.ps1 -Strict
+```
+
+**Run hard preset audit report (hard is allowed to lose):**
+```powershell
+.\tools\headless_audit.ps1 -Preset hard
+```
+
 **Launch game:**
 ```powershell
 & "E:\godot\Godot_v4.6.3-stable_win64.exe" --path "E:\godot\tiny-campfire-village"
@@ -83,6 +93,14 @@ Each night, each villager is fed individually; if food is insufficient a village
 ### Balance tuning
 
 All numeric parameters live in `data/balance.json` and are loaded into `BalanceData` at startup. `BalanceData` uses `set(key, value)` reflection — adding a new parameter requires adding both a property to the class and a key to the JSON file.
+
+After any default balance or simulation-rule change, run
+`.\tools\headless_audit.ps1 -Strict`. The audit parses the deterministic
+60-day headless run plus JSONL action log and writes
+`.godot/headless_audit/<run>/audit_report.json`. Current gates require the
+default preset to win on day 61, monitor anomalies to stay at 0, negative task
+claims to stay near zero, final strategic food to stay bounded, and daily task
+cancellation bursts to remain bounded. See `docs/headless_balance_pipeline.md`.
 
 ### Adding a new task type
 
