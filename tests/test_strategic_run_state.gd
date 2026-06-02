@@ -141,3 +141,37 @@ func test_last_starving_villager_still_loses_run() -> void:
 	assert_eq(sim.villagers[0].status, VillagerAgent.Status.DEAD)
 	assert_eq(sim.store.get_resource("population"), 0)
 	assert_signal_emitted(sim, "game_lost")
+
+func test_game_lost_emits_only_once_across_repeated_resolutions() -> void:
+	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
+	sim.setup_for_test(25, 40, 3)
+	sim.store.set_resource("food", 0)
+	watch_signals(sim)
+	# Three zero-food days trip the loss; subsequent resolutions must not re-emit.
+	for i in range(6):
+		sim._resolve_strategic_daily_state()
+	assert_eq(get_signal_emit_count(sim, "game_lost"), 1)
+	assert_true(sim.is_game_over())
+
+func test_game_over_blocks_further_resolution() -> void:
+	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
+	sim.setup_for_test(25, 40, 3)
+	watch_signals(sim)
+	sim.end_game_lost("test")
+	# Once latched, end_game_won must not flip the outcome or emit.
+	sim.end_game_won()
+	assert_eq(get_signal_emit_count(sim, "game_lost"), 1)
+	assert_eq(get_signal_emit_count(sim, "game_won"), 0)
+
+func test_game_won_latches_after_win_day() -> void:
+	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
+	sim.setup_for_test(25, 40, 3)
+	sim._balance.days_per_season = 15
+	sim.game_time.setup(0.001, 0.001, 15)
+	sim.game_time.day = 60
+	watch_signals(sim)
+	# Cross into day 61 (win), then keep advancing days — game_won fires once.
+	for i in range(8):
+		sim.game_time._advance_phase()
+	assert_eq(get_signal_emit_count(sim, "game_won"), 1)
+	assert_true(sim.is_game_over())

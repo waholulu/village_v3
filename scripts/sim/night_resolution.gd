@@ -54,7 +54,7 @@ static func _resolve_campfire(sim) -> void:
 			"wood_needed": needed,
 		})
 		if sim.campfire_out_nights >= balance.max_campfire_out_nights:
-			sim.game_lost.emit("Campfire out for %d consecutive nights" % sim.campfire_out_nights)
+			sim.end_game_lost("Campfire out for %d consecutive nights" % sim.campfire_out_nights)
 	else:
 		sim.campfire_out_nights = 0
 		sim._log({"event": "campfire_ok", "wood_consumed": consumed})

@@ -114,6 +114,10 @@ For higher-level project framing and the multi-phase outline, see
 - Initial DAY phase emits no `day_started` signal (subsequent days do).
 - Win: after day 60 resolves and `day` advances to 61, `VillageSimulation`
   emits `game_won`.
+- Game over is latched (`is_game_over()`): `game_won` and `game_lost` each fire
+  at most once per run. After either fires, `_on_day_started` / `_on_night_started`
+  short-circuit, so no further resolution or duplicate signals occur (a night
+  that starves several villagers, or days past the win day, do not re-emit).
 
 ## Tasks
 
@@ -235,7 +239,7 @@ Four buildings, data-driven via `BuildingDefs.BUILDINGS`:
 | House | 8 wood | 1 | `population_growth_enabled` AND villagers >= capacity | `population_capacity += population_capacity_per_house` |
 | Watchtower | 6 wood | 2 | `day >= 4` AND not yet built | Halves wolf damage before fence mitigation |
 | Fence | 2 wood | 3 | wolves present AND `_wolf_threat_count > 0` AND `_fence_count < 8` | Each fence multiplies remaining wolf damage by `1 - fence_wolf_damage_reduction` |
-| Storage | 4 wood | 4 | food near or above current cap | Increases food spoilage cap by `food_capacity_per_storage` |
+| Storage | 4 wood | 4 | `fresh_food >= food_surplus_threshold` | Increases food spoilage cap by `food_capacity_per_storage` |
 
 - One building planned per day_start (`ConstructionPlanner.plan` returns
   one decision at most). Wood budget is checked first; building is skipped

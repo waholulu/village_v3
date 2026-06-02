@@ -14,7 +14,6 @@ func before_each() -> void:
 	balance.starting_population = 3
 	balance.starting_population_capacity = 3
 	balance.population_growth_enabled = true
-	balance.house_wood_cost = 8
 	balance.population_capacity_per_house = 2
 	balance.food_required_for_new_villager = 2
 	wg = WorldGenerator.new()

@@ -46,6 +46,10 @@ var _wolf_threat_count: int = 0
 
 var _balance: BalanceData
 var _task_gen_enabled: bool = true
+# Latches once the run ends so game_won / game_lost fire exactly once. Without
+# it, _on_day_started re-emits game_won every day after the win day, and a night
+# that kills several villagers can emit game_lost once per death.
+var _game_over: bool = false
 var _next_villager_id: int = 1
 # Throttle counter for the per-frame monitor check inside _tick_villagers.
 # Eager checks on state-change events (night, day, build, regrowth, save load)
@@ -110,7 +114,6 @@ func setup_for_test(wood: int, food: int, villager_count: int) -> void:
 	balance.max_campfire_out_nights = 2
 	balance.fresh_food_spoilage_per_night = 0  # disable spoilage in unit tests
 	balance.starting_population_capacity = villager_count
-	balance.house_wood_cost = 8
 	balance.population_capacity_per_house = 2
 	balance.food_required_for_new_villager = 2
 	balance.max_hunger = 3
@@ -161,6 +164,7 @@ func _reset_state() -> void:
 	_storage_count = 0
 	_wolf_threat_count = 0
 	_monitor_throttle_counter = 0
+	_game_over = false
 	_next_villager_id = 1
 	# Default-on; setup_for_test() flips it to false after _reset_state runs.
 	# Without this reset, a reused instance could leak the test setting into a
@@ -204,7 +208,24 @@ func _apply_food_spoilage() -> void:
 	# campfire → spoilage) lives in NightResolution.resolve().
 	NightResolutionScript.apply_food_spoilage(self)
 
+func end_game_won() -> void:
+	if _game_over:
+		return
+	_game_over = true
+	game_won.emit()
+
+func end_game_lost(reason: String) -> void:
+	if _game_over:
+		return
+	_game_over = true
+	game_lost.emit(reason)
+
+func is_game_over() -> bool:
+	return _game_over
+
 func _on_night_started(_day: int) -> void:
+	if _game_over:
+		return
 	resolve_night()
 	if nature != null and nature.check_wolf_threat(campfire_out_nights):
 		_apply_wolf_disruption()
@@ -216,11 +237,16 @@ func _apply_wolf_disruption() -> void:
 	WolfThreatSystemScript.apply_disruption(self)
 
 func _on_day_started(_day: int) -> void:
+	if _game_over:
+		return
 	_resolve_policy_daily_resources()
 	_resolve_strategic_daily_state()
+	if _game_over:
+		# A strategic loss streak fired during daily resolution above.
+		return
 	# Win when the player survives through the final MVP day.
 	if _day > get_days_to_win():
-		game_won.emit()
+		end_game_won()
 		return
 	# Purge COMPLETED/CANCELLED tasks so the board doesn't accumulate forever.
 	# Only OPEN/CLAIMED tasks survive — those are the only ones the planner
@@ -277,7 +303,7 @@ func apply_strategic_resource_delta(resource_name: String, delta: int) -> void:
 	if resource_name == "population":
 		_emit_population_changed()
 		if store.get_resource("population") <= 0:
-			game_lost.emit("Population reached 0")
+			end_game_lost("Population reached 0")
 
 func mark_villager_dead(villager: VillagerAgent, reason: String) -> void:
 	if villager == null or villager.status == VillagerAgent.Status.DEAD:
@@ -315,18 +341,18 @@ func _resolve_strategic_daily_state() -> void:
 	if store == null or _balance == null:
 		return
 	if store.get_resource("population") <= 0:
-		game_lost.emit("Population reached 0")
+		end_game_lost("Population reached 0")
 		return
 	zero_food_days = _update_zero_streak("food", zero_food_days)
 	zero_morale_days = _update_zero_streak("morale", zero_morale_days)
 	zero_security_days = _update_zero_streak("security", zero_security_days)
 	var limit: int = _balance.zero_resource_loss_days
 	if zero_food_days >= limit:
-		game_lost.emit("Food stayed at 0 for %d days" % zero_food_days)
+		end_game_lost("Food stayed at 0 for %d days" % zero_food_days)
 	elif zero_morale_days >= limit:
-		game_lost.emit("Morale stayed at 0 for %d days" % zero_morale_days)
+		end_game_lost("Morale stayed at 0 for %d days" % zero_morale_days)
 	elif zero_security_days >= limit:
-		game_lost.emit("Security stayed at 0 for %d days" % zero_security_days)
+		end_game_lost("Security stayed at 0 for %d days" % zero_security_days)
 
 func _update_zero_streak(resource_name: String, current_streak: int) -> int:
 	if store.get_resource(resource_name) <= 0:

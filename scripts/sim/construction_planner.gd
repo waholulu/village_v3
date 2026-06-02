@@ -47,9 +47,10 @@ func _condition_met(key: String, sim: VillageSimulation) -> bool:
 			return sim.game_time != null and sim.game_time.day >= 4 and sim._watchtower_count == 0
 		"storage":
 			# Storage protects fresh surplus; stable stored food already lives in
-			# the unified food pool and should not force an opening build.
-			return sim.store.get_resource("fresh_food") >= sim._balance.food_surplus_threshold \
-				and sim._storage_count < BuildingDefs.BUILDINGS["storage"].max_count
+			# the unified food pool and should not force an opening build. The
+			# max_count cap is enforced by plan() via _count_existing, so this
+			# only gates on the surplus trigger.
+			return sim.store.get_resource("fresh_food") >= sim._balance.food_surplus_threshold
 	return false
 
 func _has_wolves(sim: VillageSimulation) -> bool:
