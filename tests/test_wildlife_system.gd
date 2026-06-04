@@ -151,13 +151,22 @@ func test_open_hunt_task_cancels_when_deer_left_target() -> void:
 	assert_eq(task.status, Task.Status.CANCELLED,
 		"Open hunt tasks should be cancelled once the deer is no longer at the target tile")
 
-func test_hunt_tasks_are_not_generated_when_food_is_surplus() -> void:
+func test_hunt_tasks_are_not_generated_when_food_is_surplus_without_food_policy() -> void:
 	var sim := _setup_hunt_task_sim(25)
+	sim.active_policy = PolicyDefs.REST_FIRST
 	var deer_pos := _first_walkable_near_hut(sim.world_gen)
 	sim.nature.animals.append(WildlifeAgent.new(1, WildlifeAgent.Kind.DEER, deer_pos, 1))
 	sim._generate_tasks()
 	assert_false(sim.board.has_active_task_of_type("hunt_deer"),
 		"Surplus food should suppress new hunt tasks instead of filling the board")
+
+func test_food_policy_can_generate_limited_hunt_tasks_above_surplus() -> void:
+	var sim := _setup_hunt_task_sim(25)
+	var deer_pos := _first_walkable_near_hut(sim.world_gen)
+	sim.nature.animals.append(WildlifeAgent.new(1, WildlifeAgent.Kind.DEER, deer_pos, 1))
+	sim._generate_tasks()
+	assert_true(sim.board.has_active_task_of_type("hunt_deer"))
+	assert_lte(_count_active_tasks_of_type(sim, "hunt_deer"), sim._balance.max_policy_open_tasks_per_type)
 
 func test_wildlife_changed_signal_emits() -> void:
 	var sim: VillageSimulation = add_child_autoqfree(VillageSimulation.new())
@@ -207,3 +216,10 @@ func _first_walkable_near_hut(wg_local: WorldGenerator) -> Vector2i:
 			if wg_local.is_in_bounds(pos) and wg_local.is_walkable(pos.x, pos.y):
 				return pos
 	return WorldGenerator.HUT_POS
+
+func _count_active_tasks_of_type(sim: VillageSimulation, task_type: String) -> int:
+	var count := 0
+	for task in sim.board._tasks:
+		if task.type == task_type and (task.status == Task.Status.OPEN or task.status == Task.Status.CLAIMED):
+			count += 1
+	return count

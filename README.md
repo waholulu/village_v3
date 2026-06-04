@@ -35,6 +35,8 @@ log, and writes `.godot/headless_audit/<run>/audit_report.json`. See
 - F3: toggle debug overlay
 - F5: save game
 - F9: load game
+- 1 / 2 / 3 / 4: set simulation speed to 1x / 2x / 4x / 10x
+- Mouse wheel: switch map zoom between integer 1x and 2x
 
 ## Goal
 Target MVP: survive 60 days through the first winter. Keep the MVP small:

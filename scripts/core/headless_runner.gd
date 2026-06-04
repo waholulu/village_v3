@@ -65,6 +65,10 @@ func _init() -> void:
 		if not _finished:
 			_print_monitor(anomalies)
 	)
+	sim.event_pending.connect(func(event: Dictionary):
+		if not _finished:
+			_resolve_headless_event(sim, event)
+	)
 
 	sim.game_won.connect(func():
 		_finished = true
@@ -173,6 +177,20 @@ func _close_logger(sim: VillageSimulation, result: String) -> void:
 	})
 	_logger.close()
 	print("Log saved: %d events → %s" % [_logger.get_count(), _logger.get_path()])
+
+func _resolve_headless_event(sim: VillageSimulation, event: Dictionary) -> void:
+	var options: Array = event.get("options", [])
+	if options.is_empty():
+		return
+	var seed := sim._balance.world_seed if sim._balance != null else 0
+	var key := "event_option:%d:%d:%s" % [seed, sim.game_time.day, event.get("id", "")]
+	var option: Dictionary = options[absi(key.hash()) % options.size()]
+	var result := sim.resolve_pending_event(str(option.get("id", "")))
+	print("  event %s option %s -> %s" % [
+		event.get("id", ""),
+		result.get("option_id", ""),
+		result.get("result_text", "")
+	])
 
 func _print_snapshot(label: String, sim: VillageSimulation) -> void:
 	print(

@@ -54,6 +54,9 @@ For higher-level project framing and the multi-phase outline, see
 - Policy changes are accepted only on days 1, 8, 15, 22, 29, 36, 43, 50,
   and 57. Invalid policy ids are rejected, and non-boundary attempts keep the
   previous policy.
+- Each weekly boundary can be confirmed only once. `last_policy_choice_day`
+  records that confirmation, including when the player keeps the current
+  policy, and is preserved by save/load.
 - Implemented policies:
   - `food_first`: boosts food output and food task scores.
   - `wood_first`: boosts wood output and chop-tree task scores.
@@ -74,17 +77,58 @@ For higher-level project framing and the multi-phase outline, see
   checks: apply visible-villager job output modified by status and policy.
   Food is consumed by the nightly per-villager hunger pass, not by a second
   abstract daily drain.
+- During the day, the active policy can keep a small visible task queue alive
+  above the survival floor: `food_first` targets food 48, `wood_first` targets
+  wood 31, and `explore_forest` targets both. Policy-driven resource queues
+  are capped at 3 active tasks per type.
 - The daily bridge uses deterministic hash rolls based on `world_seed`, day,
   villager id, and roll tag. It does not use global random state.
 - Resource tasks now also update the matching strategic resource:
   `gather_food` and `hunt_deer` add strategic `food`, and `chop_tree` adds
   strategic `wood`.
+- Default map task yields are `wood_per_tree = 4`, `food_per_bush = 2`, and
+  `food_per_deer = 3` before job/status/policy/event modifiers.
 - Successful daily food jobs add their full food output to `stored_food`, which
   also increases authoritative `food`. Map harvesting and hunting add
   `fresh_food`, which also increases authoritative `food`.
 - This bridge is still a migration layer: fresh/stored buckets remain active
   for spoilage flavor and backwards-compatible saves, but they no longer form a
   second food economy.
+
+## Event Cards
+
+- Phase 3 event cards are implemented as a deterministic data deck in
+  `data/events.json`.
+- The deck contains exactly 25 cards: 5 each for `weather`, `beasts`,
+  `disease`, `food`, and `villager_conflict`.
+- Every card has 2 or 3 options. Every option has immediate result text and at
+  least one immediate effect. Each option may also define one `short_term`
+  effect or `null`.
+- `VillageSimulation` stores `pending_event`, `active_event_effects`,
+  `last_event_result`, and `last_event_day`.
+- Event selection is deterministic from `world_seed`, day, card weights, and
+  active `event_weight_multiplier` effects. The deck draw does not use global
+  random state.
+- The current simulation attempts one event every third day starting on day 3.
+  It never draws while another event is pending, and `last_event_day` prevents
+  multiple events from triggering on the same day.
+- Live play does not auto-resolve pending events. Phase 4 UI will expose player
+  choices. The headless runner resolves pending events immediately with a
+  deterministic option hash so audits and long runs continue unattended.
+- Immediate supported effects:
+  - `resource_delta`: changes a strategic resource through the normal
+    clamped resource path.
+  - `villager_status`: sets one or more living villagers to `healthy`,
+    `tired`, `injured`, `sick`, or `dead`; non-working statuses release active
+    tasks.
+- Short-term supported effects:
+  - `output_multiplier`: multiplies matching daily job output.
+  - `risk_delta`: adjusts matching deterministic risk chances, currently
+    hunter injury and herbalist recovery.
+  - `event_weight_multiplier`: multiplies future card weights for one category
+    or all categories.
+- Short-term effects start on the next daily resolution, decrement once per
+  active day, and expire automatically.
 
 ## World
 
@@ -111,6 +155,9 @@ For higher-level project framing and the multi-phase outline, see
 
 - `GameTime` advances DAY ⇄ NIGHT on a timer. Durations from balance:
   `day_duration_seconds`, `night_duration_seconds`.
+- The HUD clock is display-only. Day maps linearly to `06:00-17:59`; night
+  maps linearly to `18:00-05:59`. This does not change simulation tick,
+  phase duration, or win/loss timing.
 - Initial DAY phase emits no `day_started` signal (subsequent days do).
 - Win: after day 60 resolves and `day` advances to 61, `VillageSimulation`
   emits `game_won`.
@@ -128,17 +175,21 @@ balance):
   created by `ConstructionPlanner` at day_start. Scored as flat bonuses
   (25 / 20 / 15 / 12) minus distance × 0.5.
 - `gather_food`: created per nearby BERRY_BUSH when
-  `food < food_low_threshold`, capped by
-  `max_open_resource_tasks_per_type` active gather tasks.
-- `chop_tree`: created per nearby TREE when `wood < wood_low_threshold`,
-  capped by `max_open_resource_tasks_per_type` active chop tasks.
-- `hunt_deer`: created when `food < food_surplus_threshold` and a deer is
-  within `deer_hunt_radius` of HUT (default preset: 40). Existing OPEN hunt
-  tasks are cancelled only when their target deer is no longer at that tile,
-  the deer has moved outside the hunt radius, the approach tile becomes
-  invalid, or food reaches `food_surplus_threshold`. CLAIMED hunters finish
-  their current run; if the deer is gone when they arrive, the hunt resolves
-  as `deer_escaped`.
+  `food < food_low_threshold`, or while a food-driving policy is active and
+  food is below `policy_food_task_target`; capped by the pressure or policy
+  active-task limit.
+- `chop_tree`: created per nearby TREE when `wood < wood_low_threshold`, or
+  while a wood-driving policy is active and wood is below
+  `policy_wood_task_target`; capped by the pressure or policy active-task
+  limit.
+- `hunt_deer`: created when `food < food_surplus_threshold`, or while a
+  food-driving policy is active and food is below `policy_food_task_target`,
+  and a deer is within `deer_hunt_radius` of HUT (default preset: 40).
+  Existing OPEN hunt tasks are cancelled only when their target deer is no
+  longer at that tile, the deer has moved outside the hunt radius, the
+  approach tile becomes invalid, or food reaches the current food task cancel
+  target. CLAIMED hunters finish their current run; if the deer is gone when
+  they arrive, the hunt resolves as `deer_escaped`.
 - `guard_watch`: created by `defense_first` while security is below 60.
   Completed guard work adds strategic security.
 - `tend_villager`: created by `rest_first` when any villager is injured or
@@ -154,6 +205,10 @@ implication (no second-tier scheduling).
 - Create gather_food when `food < food_low_threshold` (default 6).
 - Cancel open gather_food when `food >= food_surplus_threshold` (default 20).
 - Same pattern for chop_tree with `wood_low/surplus_threshold`.
+- If the active policy wants that resource, the cancel target rises to the
+  policy target instead (`policy_food_task_target = 48`,
+  `policy_wood_task_target = 31`), and generation uses
+  `max_policy_open_tasks_per_type = 3` until the policy target is met.
 - The gap between low and surplus lets idle villagers consume existing
   OPEN tasks instead of going idle the moment stock crosses the floor.
 - Resource task generation considers nearest resources first and keeps at most
@@ -175,6 +230,13 @@ implication (no second-tier scheduling).
 - `pick_best_task` scans all OPEN tasks via `UtilityScorer.score_task`,
   takes the highest. Pure function, no oscillation prevention needed
   because no priority loops exist.
+- Matching food/wood/explore policies add a small task intent bonus before
+  distance and job multipliers so policy-generated tasks can be claimed even
+  while resources are above the survival floor. The policy intent bonus does
+  not stack onto the low-resource scorer arms.
+- When food or wood is below the scorer's 10-point need line, matching
+  gather/hunt/chop tasks receive an additional survival urgency bonus so
+  distant but necessary tasks remain claimable.
 - Distance penalty in scoring uses `task.approach_tile`, not
   `target_tile`. For non-walkable targets the approach tile is where the
   villager actually goes.
@@ -279,7 +341,7 @@ In `_on_night_started`:
 - `SaveManager.save()` writes the full current grid as `tiles`, plus
   legacy food fields, grouped strategic resources, active policy,
   zero-resource streaks, day/phase, villager positions + hunger + names +
-  job + status, and
+  job + status, pending event id, active event effects, last event result, and
   `_wolf_threat_count`. **No tasks, no buildings list, no derived
   building counters** — all reconstructed from the grid.
 - `load_into()`:
@@ -288,6 +350,8 @@ In `_on_night_started`:
   - Restores `zero_food_days`, `zero_morale_days`, and
     `zero_security_days`.
   - Restores active policy.
+  - Restores pending event from the event deck, active event effects,
+    `last_event_result`, and `last_event_day`.
   - Restores grid via `world_gen.set_tile()` for each cell.
   - Recomputes `_fence_count` / `_watchtower_count` / `_storage_count`
     from tile counts.
@@ -330,7 +394,8 @@ Events include: `task_claimed`, `task_completed`, `task_cancelled` (with
 reason), `built`, `construction_planned`, `wolf_threat`,
 `wolf_threat_mitigated`, `night_hunger`, `campfire_ok`/`campfire_out`,
 `food_spoiled`, `regrowth`, `deer_spawned`, `wolf_spawned`,
-`wolf_despawned`, `run_summary`. The logger is never above 50 lines —
+`wolf_despawned`, `event_drawn`, `event_resolved`,
+`event_effect_expired`, `run_summary`. The logger is never above 50 lines —
 do not grow it.
 
 ## Headless Balance Audit
@@ -352,7 +417,28 @@ repeatable tuning loop.
 - Left click selects a tile for a read-only inspector panel showing terrain,
   occupants, wildlife, and task relations. Clicking HUD panels does not select
   world tiles, and clicking outside the map clears selection.
-- HUD shows day/phase, wood, food, population with dead count, security,
-  morale, nature counts, task counts, monitor status, and the tile inspector.
-- Both HUD and DebugOverlay are pure signal-driven — no per-frame
-  polling of simulation state.
+- The world keeps a 32x32 logical grid. Ground uses deterministic visual
+  variants, while features render on a separate layer with bottom-center grid
+  anchors. Trees and selected buildings may extend upward or sideways but
+  never below their occupied cell.
+- The default camera zoom is integer 2x; mouse wheel switches between integer
+  1x and 2x without changing tile selection coordinates.
+- HUD shows day/season clock, the five strategic resources, active policy,
+  short-term effects, task counts, speed controls, the tile inspector, and a
+  six-entry player-facing village chronicle.
+- Speed controls are 1x, 2x, 4x, and 10x. Keyboard keys 1-4 select those
+  speeds. Speed changes affect observation time only and do not alter
+  deterministic simulation rules.
+- A weekly policy choice or pending event blocks live play. The HUD stores the
+  current nonzero speed, sets `Engine.time_scale` to zero, and restores the
+  stored speed only after all blocking choices and result text are resolved.
+- Blocking priority is weekly policy choice before a pending event. Save/load
+  reopens whichever unresolved blocking choice remains.
+- `VillageSimulation` emits `policy_changed`, `daily_summary`, and
+  `activity_logged` as observation signals for the player-facing UI. These do
+  not alter simulation state or headless JSONL content.
+- DebugOverlay shows pending event title/category, active event-effect count,
+  and the last resolved event option.
+- Both HUD and DebugOverlay are pure signal-driven — no per-frame polling of
+  simulation state by UI scripts. The HUD clock refreshes from `GameTime`'s
+  clock signal.

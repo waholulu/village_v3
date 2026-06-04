@@ -65,3 +65,13 @@ static func task_score_multiplier(policy: String, task_type: String) -> float:
 		EXPLORE_FOREST:
 			return 1.2 if task_type == "hunt_deer" or task_type == "chop_tree" else 1.0
 	return 1.0
+
+static func task_intent_bonus(policy: String, task_type: String) -> float:
+	match policy:
+		FOOD_FIRST:
+			return 12.0 if task_type == "gather_food" or task_type == "hunt_deer" else 0.0
+		WOOD_FIRST:
+			return 10.0 if task_type == "chop_tree" else 0.0
+		EXPLORE_FOREST:
+			return 8.0 if task_type == "gather_food" or task_type == "hunt_deer" or task_type == "chop_tree" else 0.0
+	return 0.0

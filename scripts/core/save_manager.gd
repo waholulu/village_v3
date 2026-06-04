@@ -30,6 +30,11 @@ func save(sim: VillageSimulation) -> void:
 		"campfire_out_nights": sim.campfire_out_nights,
 		"population_capacity": sim.population_capacity,
 		"active_policy": sim.active_policy,
+		"last_policy_choice_day": sim.last_policy_choice_day,
+		"pending_event_id": sim.pending_event.get("id", ""),
+		"active_event_effects": sim.active_event_effects.duplicate(true),
+		"last_event_result": sim.last_event_result.duplicate(true),
+		"last_event_day": sim.last_event_day,
 		"wolf_threat_count": sim._wolf_threat_count,
 		"nature": sim.nature.to_save_data() if sim.nature else {},
 		"villagers": [],
@@ -91,6 +96,8 @@ func load_into(sim: VillageSimulation) -> bool:
 	sim.campfire_out_nights = data["campfire_out_nights"]
 	sim.population_capacity = data.get("population_capacity", sim.population_capacity)
 	sim.active_policy = data.get("active_policy", sim.active_policy)
+	sim.last_policy_choice_day = int(data.get("last_policy_choice_day", 0))
+	_restore_event_state(sim, data)
 	sim._wolf_threat_count = data.get("wolf_threat_count", 0)
 	if sim.nature != null:
 		sim.nature.load_save_data(data.get("nature", {}))
@@ -132,6 +139,18 @@ func load_into(sim: VillageSimulation) -> bool:
 	sim.run_monitor_check()
 	print("Loaded from ", SAVE_PATH)
 	return true
+
+func _restore_event_state(sim: VillageSimulation, data: Dictionary) -> void:
+	sim.pending_event.clear()
+	var pending_event_id: String = str(data.get("pending_event_id", ""))
+	if pending_event_id != "" and sim.event_deck != null:
+		sim.pending_event = sim.event_deck.get_event(pending_event_id)
+	sim.active_event_effects.clear()
+	for effect in data.get("active_event_effects", []):
+		if effect is Dictionary:
+			sim.active_event_effects.append((effect as Dictionary).duplicate(true))
+	sim.last_event_result = data.get("last_event_result", {}).duplicate(true)
+	sim.last_event_day = int(data.get("last_event_day", 0))
 
 func _restore_grid(sim: VillageSimulation, tiles: Array) -> void:
 	if tiles.is_empty():

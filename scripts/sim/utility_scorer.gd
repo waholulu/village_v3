@@ -15,10 +15,16 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, _gt: 
 	match task.type:
 		"gather_food":
 			score += maxf(0.0, 10.0 - float(food)) * 3.0
+			if food < 10:
+				score += 8.0
 		"hunt_deer":
 			score += maxf(0.0, 10.0 - float(food)) * 2.8
+			if food < 10:
+				score += 8.0
 		"chop_tree":
 			score += maxf(0.0, 10.0 - float(wood)) * 2.0
+			if wood < 10:
+				score += 8.0
 		"build_house":
 			score += 25.0
 		"build_watchtower":
@@ -32,8 +38,19 @@ func score_task(villager: VillagerAgent, task: Task, store: ResourceStore, _gt: 
 		"tend_villager":
 			score += 18.0
 
+	if policy != "":
+		score += _policy_intent_bonus(task.type, policy, food, wood)
 	score -= dist * 0.5
 	score *= JobDefs.task_score_multiplier(villager.job, task.type)
 	if policy != "":
 		score *= PolicyDefs.task_score_multiplier(policy, task.type)
 	return score
+
+func _policy_intent_bonus(task_type: String, policy: String, food: int, wood: int) -> float:
+	var bonus := PolicyDefs.task_intent_bonus(policy, task_type)
+	match task_type:
+		"gather_food", "hunt_deer":
+			return bonus if food >= 10 else 0.0
+		"chop_tree":
+			return bonus if wood >= 10 else 0.0
+	return bonus

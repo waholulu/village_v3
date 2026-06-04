@@ -18,6 +18,14 @@ static func build(sim: VillageSimulation) -> Dictionary:
 		"wood_shortfall": maxi(0, wood_needed - sim.store.get_resource("wood")),
 		"monitor_anomalies": sim.monitor_anomalies.size(),
 	}
+	var pending_event := {}
+	if sim.has_pending_event():
+		pending_event = {
+			"id": sim.pending_event.get("id", ""),
+			"category": sim.pending_event.get("category", ""),
+			"title": sim.pending_event.get("title", ""),
+			"option_count": (sim.pending_event.get("options", []) as Array).size(),
+		}
 	var days_to_win: int = sim.get_days_to_win()
 	return {
 		"day": sim.game_time.day,
@@ -28,6 +36,8 @@ static func build(sim: VillageSimulation) -> Dictionary:
 		"time_left": sim.game_time.get_time_left(),
 		"active_policy": sim.active_policy,
 		"active_policy_name": PolicyDefs.get_display_name(sim.active_policy),
+		"last_policy_choice_day": sim.last_policy_choice_day,
+		"can_change_policy": sim.can_change_policy(),
 		"wood": sim.store.get_resource("wood"),
 		"strategic_food": sim.store.get_resource("food"),
 		"security": sim.store.get_resource("security"),
@@ -47,6 +57,10 @@ static func build(sim: VillageSimulation) -> Dictionary:
 			"morale": sim.zero_morale_days,
 			"security": sim.zero_security_days,
 		},
+		"pending_event": pending_event,
+		"active_event_effects": sim.active_event_effects.duplicate(true),
+		"last_event_result": sim.last_event_result.duplicate(true),
+		"last_event_day": sim.last_event_day,
 		"tasks": tasks,
 		"nature": sim.get_nature_summary(),
 		"risk": risk,

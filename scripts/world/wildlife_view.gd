@@ -3,8 +3,8 @@ extends Node2D
 
 const DisplayMetrics = preload("res://scripts/world/display_metrics.gd")
 const TILE_SIZE: int = DisplayMetrics.TILE_SIZE
-const DEER_TEXTURE_PATH := "res://assets/wildlife/deer.png"
-const WOLF_TEXTURE_PATH := "res://assets/wildlife/wolf.png"
+const DEER_TEXTURE_PATH := "res://assets/wildlife_v2/deer.png"
+const WOLF_TEXTURE_PATH := "res://assets/wildlife_v2/wolf.png"
 
 var _animals: Array[Dictionary] = []
 var _sprites: Array[Sprite2D] = []
@@ -21,6 +21,7 @@ func _process(_delta: float) -> void:
 			break
 		var a: Dictionary = _animals[i]
 		_sprites[i].position = Vector2(a["x"], a["y"]) * TILE_SIZE
+		_sprites[i].z_index = int(a["y"]) * 10 + 5
 
 func _sync_sprites() -> void:
 	while _sprites.size() > _animals.size():

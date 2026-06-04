@@ -139,7 +139,7 @@ set_point_walkable → tile_changed.emit → store.add_resource) and the
 | starting_population / starting_food | 5 / 40 |
 | starting_wood / starting_security / starting_morale | 25 / 50 / 60 |
 | visible villagers / strategic run length | 5 / 60 days |
-| wood_per_tree / food_per_bush | 3 / 2 |
+| wood_per_tree / food_per_bush | 4 / 2 |
 | food / wood low_threshold | 6 / 6 |
 | food / wood surplus_threshold | 20 / 12 |
 | max_campfire_out_nights | 3 |

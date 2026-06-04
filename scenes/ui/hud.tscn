@@ -3,127 +3,287 @@
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hudgd"]
 
 [node name="HUD" type="CanvasLayer"]
+layer = 5
 script = ExtResource("1_hudgd")
 
 [node name="Panel" type="Panel" parent="."]
-offset_right = 1440.0
-offset_bottom = 78.0
-
-[node name="InspectorPanel" type="Panel" parent="."]
-offset_left = 8.0
-offset_top = 86.0
-offset_right = 496.0
-offset_bottom = 190.0
-
-[node name="LblTileTitle" type="Label" parent="InspectorPanel"]
 offset_left = 8.0
 offset_top = 8.0
-offset_right = 472.0
-offset_bottom = 28.0
+offset_right = 1432.0
+offset_bottom = 104.0
+
+[node name="TopRow" type="HBoxContainer" parent="Panel"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 1412.0
+offset_bottom = 44.0
+theme_override_constants/separation = 12
+
+[node name="LblDay" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(222, 0)
+layout_mode = 2
+text = "Day 1 - Spring 06:00"
+
+[node name="LblPopulation" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(126, 0)
+layout_mode = 2
+text = "POP 5/5"
+
+[node name="LblFood" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "FOOD 40"
+
+[node name="LblWood" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "WOOD 25"
+
+[node name="LblHungry" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+text = "SECURITY 50"
+
+[node name="LblCampfire" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "MORALE 60"
+
+[node name="Spacer" type="Control" parent="Panel/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LblSpeed" type="Label" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+text = "Speed: 1x"
+
+[node name="BtnSpeed1" type="Button" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(44, 30)
+layout_mode = 2
+text = "1x"
+
+[node name="BtnSpeed2" type="Button" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(44, 30)
+layout_mode = 2
+text = "2x"
+
+[node name="BtnSpeed4" type="Button" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(44, 30)
+layout_mode = 2
+text = "4x"
+
+[node name="BtnSpeed10" type="Button" parent="Panel/TopRow"]
+custom_minimum_size = Vector2(52, 30)
+layout_mode = 2
+text = "10x"
+
+[node name="BottomRow" type="HBoxContainer" parent="Panel"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 50.0
+offset_right = 1412.0
+offset_bottom = 84.0
+theme_override_constants/separation = 18
+
+[node name="LblPolicy" type="Label" parent="Panel/BottomRow"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+text = "Policy: Food First"
+
+[node name="LblEffects" type="Label" parent="Panel/BottomRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Effects: none"
+
+[node name="LblTasks" type="Label" parent="Panel/BottomRow"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+text = "Tasks: 0 / 0"
+
+[node name="LblNature" type="Label" parent="Panel/BottomRow"]
+visible = false
+layout_mode = 2
+
+[node name="LblAI" type="Label" parent="Panel/BottomRow"]
+visible = false
+layout_mode = 2
+
+[node name="LblStatus" type="Label" parent="Panel/BottomRow"]
+layout_mode = 2
+
+[node name="InspectorPanel" type="Panel" parent="."]
+offset_left = 1030.0
+offset_top = 116.0
+offset_right = 1432.0
+offset_bottom = 290.0
+visible = false
+
+[node name="LblTileTitle" type="Label" parent="InspectorPanel"]
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 390.0
+offset_bottom = 34.0
 text = "Tile Inspector"
 
 [node name="LblTileBody" type="Label" parent="InspectorPanel"]
-offset_left = 8.0
-offset_top = 32.0
-offset_right = 472.0
-offset_bottom = 96.0
-text = "Click a tile to inspect its terrain, occupants, and tasks."
+offset_left = 12.0
+offset_top = 42.0
+offset_right = 390.0
+offset_bottom = 160.0
+text = "Click a tile to inspect it."
 autowrap_mode = 2
 
-[node name="LblDay" type="Label" parent="Panel"]
+[node name="LogPanel" type="Panel" parent="."]
 offset_left = 8.0
-offset_top = 4.0
-offset_right = 160.0
-offset_bottom = 28.0
-text = "Day 1 — Day"
+offset_top = 782.0
+offset_right = 502.0
+offset_bottom = 1024.0
 
-[node name="LblWood" type="Label" parent="Panel"]
-offset_left = 180.0
-offset_top = 4.0
-offset_right = 320.0
-offset_bottom = 28.0
-text = "Wood: 10"
-
-[node name="LblFood" type="Label" parent="Panel"]
-offset_left = 340.0
-offset_top = 4.0
+[node name="LblLogTitle" type="Label" parent="LogPanel"]
+offset_left = 12.0
+offset_top = 10.0
 offset_right = 480.0
-offset_bottom = 28.0
-text = "Food: 8"
+offset_bottom = 34.0
+text = "VILLAGE CHRONICLE"
 
-[node name="LblPopulation" type="Label" parent="Panel"]
-offset_left = 500.0
-offset_top = 4.0
-offset_right = 680.0
-offset_bottom = 28.0
-text = "Pop: 5/5  D0"
+[node name="LblLog" type="Label" parent="LogPanel"]
+offset_left = 12.0
+offset_top = 42.0
+offset_right = 480.0
+offset_bottom = 228.0
+text = "Day 1: The village wakes beside the fire."
+autowrap_mode = 2
 
-[node name="LblHungry" type="Label" parent="Panel"]
-offset_left = 700.0
-offset_top = 4.0
-offset_right = 840.0
-offset_bottom = 28.0
-text = "Hungry: 0"
+[node name="ModalDim" type="ColorRect" parent="."]
+offset_right = 1440.0
+offset_bottom = 1032.0
+color = Color(0.03, 0.04, 0.025, 0.72)
+mouse_filter = 0
+visible = false
 
-[node name="LblSpeed" type="Label" parent="Panel"]
-offset_left = 860.0
-offset_top = 4.0
-offset_right = 950.0
-offset_bottom = 28.0
-text = "Speed: 1x"
+[node name="PolicyPanel" type="Panel" parent="."]
+offset_left = 300.0
+offset_top = 174.0
+offset_right = 1140.0
+offset_bottom = 858.0
+visible = false
 
-[node name="BtnSpeed1" type="Button" parent="Panel"]
-offset_left = 960.0
-offset_top = 2.0
-offset_right = 1004.0
-offset_bottom = 30.0
-text = "1x"
+[node name="Title" type="Label" parent="PolicyPanel"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 816.0
+offset_bottom = 52.0
+text = "CHOOSE THIS WEEK'S POLICY"
+horizontal_alignment = 1
 
-[node name="BtnSpeed2" type="Button" parent="Panel"]
-offset_left = 1010.0
-offset_top = 2.0
-offset_right = 1054.0
-offset_bottom = 30.0
-text = "2x"
+[node name="Intro" type="Label" parent="PolicyPanel"]
+offset_left = 40.0
+offset_top = 62.0
+offset_right = 800.0
+offset_bottom = 94.0
+text = "The village will follow this priority for seven days."
+horizontal_alignment = 1
 
-[node name="BtnSpeed4" type="Button" parent="Panel"]
-offset_left = 1060.0
-offset_top = 2.0
-offset_right = 1104.0
-offset_bottom = 30.0
-text = "4x"
+[node name="Choices" type="VBoxContainer" parent="PolicyPanel"]
+offset_left = 60.0
+offset_top = 112.0
+offset_right = 780.0
+offset_bottom = 606.0
+theme_override_constants/separation = 12
 
-[node name="LblCampfire" type="Label" parent="Panel"]
-offset_left = 180.0
-offset_top = 30.0
-offset_right = 360.0
-offset_bottom = 54.0
-text = "Campfire out: 0"
+[node name="Food" type="Button" parent="PolicyPanel/Choices"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "FOOD FIRST  |  Stronger food output"
 
-[node name="LblTasks" type="Label" parent="Panel"]
+[node name="Wood" type="Button" parent="PolicyPanel/Choices"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "WOOD FIRST  |  Stronger wood output"
+
+[node name="Defense" type="Button" parent="PolicyPanel/Choices"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "DEFENSE FIRST  |  Stronger security output"
+
+[node name="Rest" type="Button" parent="PolicyPanel/Choices"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "REST FIRST  |  Recovery and morale"
+
+[node name="Explore" type="Button" parent="PolicyPanel/Choices"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "EXPLORE FOREST  |  Food and wood with risk"
+
+[node name="EventPanel" type="Panel" parent="."]
+offset_left = 320.0
+offset_top = 190.0
+offset_right = 1120.0
+offset_bottom = 842.0
+visible = false
+
+[node name="LblCategory" type="Label" parent="EventPanel"]
+offset_left = 28.0
+offset_top = 20.0
+offset_right = 772.0
+offset_bottom = 48.0
+text = "EVENT"
+horizontal_alignment = 1
+
+[node name="LblEventTitle" type="Label" parent="EventPanel"]
+offset_left = 28.0
+offset_top = 58.0
+offset_right = 772.0
+offset_bottom = 92.0
+text = "Cold Rain"
+horizontal_alignment = 1
+
+[node name="LblEventText" type="Label" parent="EventPanel"]
+offset_left = 54.0
+offset_top = 112.0
+offset_right = 746.0
+offset_bottom = 210.0
+text = "Event description"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Options" type="VBoxContainer" parent="EventPanel"]
+offset_left = 54.0
+offset_top = 230.0
+offset_right = 746.0
+offset_bottom = 560.0
+theme_override_constants/separation = 16
+
+[node name="ResultPanel" type="Panel" parent="."]
 offset_left = 380.0
-offset_top = 30.0
-offset_right = 590.0
-offset_bottom = 54.0
-text = "Tasks: 0 open / 0 claimed"
+offset_top = 280.0
+offset_right = 1060.0
+offset_bottom = 752.0
+visible = false
 
-[node name="LblNature" type="Label" parent="Panel"]
-offset_left = 610.0
-offset_top = 30.0
-offset_right = 900.0
-offset_bottom = 54.0
-text = "Nature: wildlife 0, regrow T0/B0"
+[node name="LblResultTitle" type="Label" parent="ResultPanel"]
+offset_left = 28.0
+offset_top = 24.0
+offset_right = 652.0
+offset_bottom = 58.0
+text = "THE VILLAGE DECIDES"
+horizontal_alignment = 1
 
-[node name="LblAI" type="Label" parent="Panel"]
-offset_left = 920.0
-offset_top = 30.0
-offset_right = 1180.0
-offset_bottom = 54.0
-text = "AI: Stable risk F0/W0"
+[node name="LblResultText" type="Label" parent="ResultPanel"]
+offset_left = 48.0
+offset_top = 90.0
+offset_right = 632.0
+offset_bottom = 300.0
+text = "Result"
+horizontal_alignment = 1
+autowrap_mode = 2
 
-[node name="LblStatus" type="Label" parent="Panel"]
-offset_left = 8.0
-offset_top = 54.0
-offset_right = 790.0
-offset_bottom = 76.0
-text = ""
+[node name="BtnResultContinue" type="Button" parent="ResultPanel"]
+offset_left = 224.0
+offset_top = 360.0
+offset_right = 456.0
+offset_bottom = 420.0
+text = "CONTINUE"

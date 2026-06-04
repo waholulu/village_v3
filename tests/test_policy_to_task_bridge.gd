@@ -30,6 +30,15 @@ func test_invalid_policy_is_rejected() -> void:
 	assert_false(sim.set_policy("gold_first"))
 	assert_eq(sim.active_policy, PolicyDefs.default_policy())
 
+func test_policy_can_only_be_confirmed_once_per_week_boundary() -> void:
+	var sim := _setup_world_sim()
+	sim.game_time.day = 1
+	assert_true(sim.set_policy(PolicyDefs.FOOD_FIRST))
+	assert_false(sim.set_policy(PolicyDefs.WOOD_FIRST))
+	assert_eq(sim.active_policy, PolicyDefs.FOOD_FIRST)
+	sim.game_time.day = 8
+	assert_true(sim.set_policy(PolicyDefs.WOOD_FIRST))
+
 func test_defense_policy_generates_guard_task() -> void:
 	var sim := _setup_world_sim()
 	sim.active_policy = PolicyDefs.DEFENSE_FIRST
@@ -43,6 +52,35 @@ func test_rest_policy_generates_tend_task_for_injured_villager() -> void:
 	sim.villagers[0].status = VillagerAgent.Status.INJURED
 	sim._generate_tasks()
 	assert_true(sim.board.has_active_task_of_type("tend_villager"))
+
+func test_food_policy_generates_opening_food_tasks_with_policy_cap() -> void:
+	var sim := _setup_world_sim()
+	sim.active_policy = PolicyDefs.FOOD_FIRST
+	sim.store.set_resource("food", 40)
+	sim._generate_tasks()
+	var food_tasks := _count_open_tasks_of_types(sim, ["gather_food", "hunt_deer"])
+	assert_gt(food_tasks, 0)
+	assert_lte(food_tasks, sim._balance.max_policy_open_tasks_per_type)
+
+func test_food_policy_target_cancels_open_policy_food_tasks() -> void:
+	var sim := _setup_world_sim()
+	sim.active_policy = PolicyDefs.FOOD_FIRST
+	var task := sim.board.create_task("gather_food", WorldGenerator.HUT_POS, 0)
+	sim.store.set_resource("food", sim._balance.policy_food_task_target)
+	sim._generate_tasks()
+	assert_eq(task.status, Task.Status.CANCELLED)
+
+func test_policy_task_intent_bonus_makes_opening_food_task_claimable() -> void:
+	var sim := _setup_world_sim()
+	var villager := sim.villagers[0]
+	var task := sim.board.create_task("gather_food", villager.tile_position, 0)
+	task.approach_tile = villager.tile_position
+	sim.store.set_resource("food", 40)
+	var score := sim.scorer.score_task(villager, task, sim.store, sim.game_time, PolicyDefs.FOOD_FIRST)
+	var picked: Task = villager.pick_best_task(sim.board, sim.store, sim.game_time, sim.scorer, PolicyDefs.FOOD_FIRST)
+	assert_gte(score, 0.0)
+	assert_not_null(picked)
+	assert_eq(picked.id, task.id)
 
 func test_food_first_boosts_farmer_daily_food_output() -> void:
 	var sim := _setup_world_sim()
@@ -155,6 +193,7 @@ func test_policy_and_job_change_task_weights_without_new_ai_state() -> void:
 func test_save_load_preserves_policy_and_jobs() -> void:
 	var sim := _setup_world_sim()
 	sim.active_policy = PolicyDefs.REST_FIRST
+	sim.last_policy_choice_day = 8
 	sim.villagers[0].job = JobDefs.HERBALIST
 	var save := SaveManager.new()
 	save.save(sim)
@@ -162,4 +201,12 @@ func test_save_load_preserves_policy_and_jobs() -> void:
 	sim.villagers[0].job = JobDefs.WOODCUTTER
 	assert_true(save.load_into(sim))
 	assert_eq(sim.active_policy, PolicyDefs.REST_FIRST)
+	assert_eq(sim.last_policy_choice_day, 8)
 	assert_eq(sim.villagers[0].job, JobDefs.HERBALIST)
+
+func _count_open_tasks_of_types(sim: VillageSimulation, types: Array[String]) -> int:
+	var count := 0
+	for task in sim.board._tasks:
+		if task.status == Task.Status.OPEN and task.type in types:
+			count += 1
+	return count

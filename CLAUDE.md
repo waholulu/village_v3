@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Product direction
+
+Hybrid village survival roguelike, Godot 4.6 + GDScript. The player is the village elder: each week they pick one policy and resolve event cards; villagers stay autonomous and execute work through the existing map / pathfinding / task AI as a thin execution layer. MVP target: survive day 60. Loss conditions: population reaches 0, or food / morale / security stays at 0 for 3 consecutive daily resolutions. Scope ceiling: 5 player-facing resources, 5 jobs, 5 weekly policies, 25 event cards.
+
+## Non-negotiables (from AGENTS.md)
+
+- Keep MVP small. No external AI frameworks, no ECS, no GOAP.
+- Simulation logic stays separate from rendering (see Architecture).
+- Prefer deterministic behavior (fixed seed); the headless audit depends on it.
+- Every simulation rule must have a test.
+- Do not change unrelated files when fixing a specific issue.
+
+## Definition of done
+
+- Game runs without errors and the debug overlay still works.
+- Relevant GUT tests pass.
+- Balance or simulation-rule changes pass `.\tools\headless_audit.ps1 -Strict`.
+- Changed rules documented in `docs/simulation_rules.md`; new tuning workflow in `docs/headless_balance_pipeline.md`.
+
 ## Commands
 
 **Run all tests (headless):**
@@ -45,7 +64,7 @@ After adding any new `.gd` file with `class_name`, always run `--import` before 
 
 ### Separation of concerns
 
-Simulation logic (`scripts/sim/`, `scripts/core/`, `scripts/world/`) extends `RefCounted` or `Node` but contains **no rendering code**. Rendering (`scripts/world/tile_map_controller.gd`, `scripts/world/villager_view.gd`) reads simulation state but never mutates it. `scenes/main/main.gd` is the only wiring point between the two layers.
+Simulation logic (`scripts/sim/`, `scripts/core/`, `scripts/world/`) extends `RefCounted` or `Node` but contains **no rendering code**. Rendering (`scripts/world/tile_map_controller.gd`, `scripts/world/villager_view.gd`, `scripts/world/wildlife_view.gd`) reads simulation state but never mutates it. UI (`scripts/ui/hud.gd`, `scripts/ui/debug_overlay.gd`) subscribes to signals only. `scenes/main/main.gd` is the only wiring point between the layers. `Events` (`scripts/core/events.gd`) is the only autoload.
 
 ### Signal flow
 
@@ -62,9 +81,11 @@ VillageSimulation signals → main.gd handlers → rendering/Events
 ### The simulation tick
 
 `VillageSimulation._process(delta)` runs every frame during DAY only:
-1. `_generate_tasks()` — creates tasks per-tick when thresholds are unmet; `has_task_for_tile()` deduplicates per resource tile
+1. `_generate_tasks()` — creates tasks per-tick when thresholds are unmet; `TaskBoard.has_task_for_tile()` deduplicates per resource tile
 2. `_tick_villagers(delta)` — each IDLE villager claims the highest-scoring open task, computes a path to `task.approach_tile` (not `target_tile`), cancels if path is empty; MOVING_TO_TARGET villagers advance along their path
 3. `run_monitor_check()` — `SimulationMonitor` scans for anomalies; emits `monitor_anomalies_changed` only when the anomaly list changes
+
+All tasks live on a single `TaskBoard` (`scripts/sim/task_board.gd`). Use `create_task / claim_task / complete_task / cancel_task` — never poke `_tasks` directly. Each `Task` carries `target_tile` and `approach_tile` (see below).
 
 ### Why `approach_tile` vs `target_tile`
 
@@ -114,3 +135,17 @@ For buildings specifically, the planner already covers the create + score steps 
 ### SimulationMonitor
 
 `scripts/sim/simulation_monitor.gd` is a passive checker invoked via `run_monitor_check()`. It returns `Array[Dictionary]` with keys `code`, `severity` (`"warning"/"error"/"critical"`), `message`. The debug overlay (F3) shows up to 4 anomalies sorted by severity. The monitor runs after every state-mutating operation.
+
+## Controls
+
+- F3: toggle debug overlay
+- F5: save game
+- F9: load game
+
+## Docs
+
+- `docs/project_overview.md` — product framing
+- `docs/simulation_rules.md` — authoritative rule list (update when rules change)
+- `docs/headless_balance_pipeline.md` — audit pipeline + gates
+- `docs/ROADMAP.md` — phase plan and anti-feature list
+- `docs/DEVELOPMENT_PLAN.md` — current in-flight plan

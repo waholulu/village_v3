@@ -3,7 +3,8 @@ extends TileMapLayer
 
 const DisplayMetrics = preload("res://scripts/world/display_metrics.gd")
 const TILE_SIZE: int = DisplayMetrics.TILE_SIZE
-const TILE_SHEET_PATH := "res://assets/tiles/campfire_tilesheet_32.png"
+const TILE_SHEET_PATH := "res://assets/ground/grass_variants.png"
+const GROUND_VARIANT_COUNT := 4
 const INVALID_TILE := Vector2i(-1, -1)
 const TILE_COLORS: Array[Color] = [
 	Color(0.3, 0.65, 0.2),   # 0 GRASS
@@ -20,27 +21,28 @@ const TILE_COLORS: Array[Color] = [
 ]
 
 var _selected_tile: Vector2i = INVALID_TILE
+var _world_seed := 0
 
 func setup(world_gen: WorldGenerator) -> void:
+	_world_seed = world_gen.last_seed
 	var ts = TileSet.new()
 	ts.tile_size = Vector2i(TILE_SIZE, TILE_SIZE)
 
 	var source = TileSetAtlasSource.new()
 	source.texture = _load_tile_texture()
 	source.texture_region_size = Vector2i(TILE_SIZE, TILE_SIZE)
-	for i in range(TILE_COLORS.size()):
+	for i in range(GROUND_VARIANT_COUNT):
 		source.create_tile(Vector2i(i, 0))
 	ts.add_source(source, 0)
 	tile_set = ts
 
 	for y in range(WorldGenerator.HEIGHT):
 		for x in range(WorldGenerator.WIDTH):
-			var tile_type: int = world_gen.get_tile(x, y)
-			set_cell(Vector2i(x, y), 0, Vector2i(tile_type, 0))
+			set_cell(Vector2i(x, y), 0, Vector2i(_ground_variant(Vector2i(x, y), world_gen.last_seed), 0))
 	queue_redraw()
 
 func refresh_tile(pos: Vector2i, tile_type: int) -> void:
-	set_cell(pos, 0, Vector2i(tile_type, 0))
+	set_cell(pos, 0, Vector2i(_ground_variant(pos, _world_seed), 0))
 	queue_redraw()
 
 func set_selected_tile(pos: Vector2i) -> void:
@@ -65,21 +67,24 @@ func _load_tile_texture() -> Texture2D:
 	if ResourceLoader.exists(TILE_SHEET_PATH):
 		var tex := load(TILE_SHEET_PATH) as Texture2D
 		if tex != null \
-			and tex.get_width() >= TILE_SIZE * TILE_COLORS.size() \
+			and tex.get_width() >= TILE_SIZE * GROUND_VARIANT_COUNT \
 			and tex.get_height() >= TILE_SIZE:
 			return tex
 	return ImageTexture.create_from_image(_make_fallback_tilesheet())
 
 func _make_fallback_tilesheet() -> Image:
-	var img = Image.create(TILE_SIZE * TILE_COLORS.size(), TILE_SIZE, false, Image.FORMAT_RGBA8)
-	for tile_idx in range(TILE_COLORS.size()):
-		var color = TILE_COLORS[tile_idx]
+	var img = Image.create(TILE_SIZE * GROUND_VARIANT_COUNT, TILE_SIZE, false, Image.FORMAT_RGBA8)
+	for tile_idx in range(GROUND_VARIANT_COUNT):
+		var color = TILE_COLORS[0].lightened(float(tile_idx) * 0.025)
 		for py in range(TILE_SIZE):
 			for px in range(TILE_SIZE):
 				var edge = (px == 0 or px == TILE_SIZE - 1 or py == 0 or py == TILE_SIZE - 1)
 				var draw_color = color.darkened(0.2) if edge else color
 				img.set_pixel(tile_idx * TILE_SIZE + px, py, draw_color)
 	return img
+
+func _ground_variant(pos: Vector2i, seed: int) -> int:
+	return absi(("%d:%d:%d" % [seed, pos.x, pos.y]).hash()) % GROUND_VARIANT_COUNT
 
 func _is_valid_tile(pos: Vector2i) -> bool:
 	return pos.x >= 0 and pos.y >= 0 and pos.x < WorldGenerator.WIDTH and pos.y < WorldGenerator.HEIGHT

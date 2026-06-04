@@ -53,7 +53,9 @@ Prefer one small change per loop:
 - Survival pressure: `food_consumed_per_villager_per_night`.
 - Food runaway or starvation softness: `deer_hunt_radius`, `food_per_deer`,
   `starting_food`, `food_surplus_threshold`, and daily food job output.
-- Task noise: `max_open_resource_tasks_per_type`, task scoring thresholds.
+- Task noise: `max_open_resource_tasks_per_type`,
+  `max_policy_open_tasks_per_type`, `policy_food_task_target`,
+  `policy_wood_task_target`, task scoring thresholds.
 - Threat pressure: wolf spawn/radius/disruption values, winter wood demand, and
   `max_campfire_out_nights`.
 

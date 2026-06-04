@@ -70,6 +70,7 @@ func test_clicking_hud_does_not_select_tile_and_clicking_outside_map_clears_sele
 	if window != null:
 		window.size = Vector2i(1280, 720)
 	await wait_process_frames(2)
+	main_scene._hud._choose_policy(PolicyDefs.FOOD_FIRST)
 	main_scene._handle_left_click(Vector2(10, 10))
 	assert_false(main_scene.has_selected_tile())
 	var world_point := _find_selectable_world_point(main_scene)
@@ -78,3 +79,15 @@ func test_clicking_hud_does_not_select_tile_and_clicking_outside_map_clears_sele
 	assert_eq(main_scene.get_selected_tile(), main_scene._tilemap.get_selected_tile())
 	main_scene._handle_left_click(Vector2(-50, -50))
 	assert_false(main_scene.has_selected_tile())
+
+func test_mouse_wheel_over_hud_does_not_zoom_world() -> void:
+	var main_scene: Node2D = add_child_autoqfree(preload("res://scenes/main/main.tscn").instantiate())
+	await wait_process_frames(2)
+	main_scene._hud._choose_policy(PolicyDefs.FOOD_FIRST)
+	main_scene._set_camera_zoom(1)
+	var wheel := InputEventMouseButton.new()
+	wheel.position = Vector2(20, 20)
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	main_scene._input(wheel)
+	assert_eq(main_scene.get_camera_zoom_multiplier(), 1)

@@ -38,6 +38,7 @@ func test_default_preset_unchanged() -> void:
 	assert_eq(balance.starting_security, 50)
 	assert_eq(balance.starting_morale, 60)
 	assert_eq(balance.days_per_season, 15)
+	assert_eq(balance.wood_per_tree, 4)
 	assert_eq(balance.wolf_threat_radius, 10)
 
 func test_hard_preset_triggers_wolf_threat_on_night_1() -> void:

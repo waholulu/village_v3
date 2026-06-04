@@ -1,0 +1,867 @@
+{
+	"events": [
+		{
+			"id": "weather_01",
+			"category": "weather",
+			"title": "Cold Rain",
+			"text": "A steady cold rain soaks the woodpile and sends everyone indoors early.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Cover the stores",
+					"result_text": "The food stays dry, but good kindling is spent on the covers.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": -2 },
+						{ "type": "resource_delta", "resource": "food", "amount": 2 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Keep gathering",
+					"result_text": "The village pushes through the rain and comes back worn down.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 1 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 0.9,
+						"duration_days": 1,
+						"label": "Muddy trails"
+					}
+				}
+			]
+		},
+		{
+			"id": "weather_02",
+			"category": "weather",
+			"title": "Heat Haze",
+			"text": "The afternoon shimmers with heat, and tempers shorten around the campfire.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Shorten the day",
+					"result_text": "Rest cools everyone down, but less work gets done.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 },
+						{ "type": "resource_delta", "resource": "wood", "amount": -1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "wood",
+						"multiplier": 0.9,
+						"duration_days": 1,
+						"label": "Short workday"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Work through it",
+					"result_text": "The work gets done, but one villager wilts by dusk.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": 2 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "weather_03",
+			"category": "weather",
+			"title": "Early Frost",
+			"text": "A pale frost settles before dawn and bites at the last soft growth.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Harvest quickly",
+					"result_text": "The village saves some food before the frost deepens.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 3 },
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Protect seedlings",
+					"result_text": "The careful work preserves future forage, but costs warm cover.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": -2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 1.1,
+						"duration_days": 2,
+						"label": "Protected forage"
+					}
+				}
+			]
+		},
+		{
+			"id": "weather_04",
+			"category": "weather",
+			"title": "Clear Skies",
+			"text": "A bright, windless day makes the forest paths easy to read.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Send gatherers",
+					"result_text": "The gatherers return with dry baskets and good spirits.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 1.1,
+						"duration_days": 1,
+						"label": "Easy trails"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Repair roofs",
+					"result_text": "The dry weather is spent on patching and tying down shelters.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": -1 },
+						{ "type": "resource_delta", "resource": "security", "amount": 2 }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "weather_05",
+			"category": "weather",
+			"title": "High Winds",
+			"text": "Hard gusts snap branches and carry strange sounds through the trees.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Gather fallen limbs",
+					"result_text": "The wind leaves a useful scatter of dry wood.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": 3 },
+						{ "type": "resource_delta", "resource": "security", "amount": -1 }
+					],
+					"short_term": {
+						"type": "event_weight_multiplier",
+						"category": "beasts",
+						"multiplier": 1.25,
+						"duration_days": 2,
+						"label": "Noisy woods"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Stay near camp",
+					"result_text": "Everyone keeps close watch until the wind dies.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 2 },
+						{ "type": "resource_delta", "resource": "food", "amount": -1 }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "beasts_01",
+			"category": "beasts",
+			"title": "Wolf Tracks",
+			"text": "Fresh tracks circle the far side of the camp before turning back into the pines.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Double the watch",
+					"result_text": "The tracks are studied and the camp sleeps more easily.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 3 },
+						{ "type": "resource_delta", "resource": "wood", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Follow them",
+					"result_text": "The hunters learn the pack's route but come back shaken.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 2 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": {
+						"type": "risk_delta",
+						"risk_type": "hunter_injury",
+						"amount": 10,
+						"duration_days": 2,
+						"label": "Risky trails"
+					}
+				}
+			]
+		},
+		{
+			"id": "beasts_02",
+			"category": "beasts",
+			"title": "Deer Near Camp",
+			"text": "A small deer herd grazes close enough that even the children spot them.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Careful hunt",
+					"result_text": "The hunters take only what they can carry safely.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 3 },
+						{ "type": "resource_delta", "resource": "security", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Let them pass",
+					"result_text": "The quiet mercy lifts the camp's mood.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 },
+						{ "type": "resource_delta", "resource": "food", "amount": -1 }
+					],
+					"short_term": {
+						"type": "event_weight_multiplier",
+						"category": "beasts",
+						"multiplier": 0.8,
+						"duration_days": 2,
+						"label": "Calm glade"
+					}
+				}
+			]
+		},
+		{
+			"id": "beasts_03",
+			"category": "beasts",
+			"title": "Boar in the Brush",
+			"text": "A rooting boar blocks a berry trail and refuses to move.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Drive it off",
+					"result_text": "The trail is cleared, but one villager takes a hard fall.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 1 },
+						{ "type": "villager_status", "target": "random_working", "status": "injured" }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Avoid the trail",
+					"result_text": "The village leaves the boar alone and loses a day of easy forage.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": -2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 0.9,
+						"duration_days": 1,
+						"label": "Blocked berry trail"
+					}
+				}
+			]
+		},
+		{
+			"id": "beasts_04",
+			"category": "beasts",
+			"title": "Owls Alarm",
+			"text": "Owls cry all night from the same ridge, and the guards swear something moved there.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Scout the ridge",
+					"result_text": "The scout finds no beast, only a better watch point.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "security",
+						"multiplier": 1.1,
+						"duration_days": 2,
+						"label": "Mapped ridge"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Ignore the omen",
+					"result_text": "Sleep returns, though the ridge stays in everyone's thoughts.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 },
+						{ "type": "resource_delta", "resource": "security", "amount": -1 }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "beasts_05",
+			"category": "beasts",
+			"title": "Scavenger Raid",
+			"text": "Small night scavengers scatter the edge stores before anyone can shout.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Save the food",
+					"result_text": "Most of the stores are recovered after a frantic chase.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": -1 },
+						{ "type": "resource_delta", "resource": "security", "amount": 1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Secure the camp",
+					"result_text": "The animals get more food, but the gaps in camp are fixed.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": -3 },
+						{ "type": "resource_delta", "resource": "security", "amount": 3 }
+					],
+					"short_term": {
+						"type": "event_weight_multiplier",
+						"category": "beasts",
+						"multiplier": 0.75,
+						"duration_days": 2,
+						"label": "Sealed stores"
+					}
+				}
+			]
+		},
+		{
+			"id": "disease_01",
+			"category": "disease",
+			"title": "Coughing Night",
+			"text": "A dry cough passes between bedrolls before sunrise.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Isolate early",
+					"result_text": "The cough is contained, but the sick villager cannot work well.",
+					"immediate": [
+						{ "type": "villager_status", "target": "random_working", "status": "sick" },
+						{ "type": "resource_delta", "resource": "security", "amount": 1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Share warm broth",
+					"result_text": "The broth comforts everyone and uses a little food.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": -2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "recovery",
+						"multiplier": 1.1,
+						"duration_days": 2,
+						"label": "Warm broth"
+					}
+				}
+			]
+		},
+		{
+			"id": "disease_02",
+			"category": "disease",
+			"title": "Fever Child",
+			"text": "A young villager burns with fever while the herbalist searches the shelves.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Use rare herbs",
+					"result_text": "The fever breaks and the camp breathes again.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 },
+						{ "type": "resource_delta", "resource": "food", "amount": -1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "recovery",
+						"multiplier": 0.9,
+						"duration_days": 1,
+						"label": "Low herb shelf"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Wait and watch",
+					"result_text": "The fever lingers and leaves the camp uneasy.",
+					"immediate": [
+						{ "type": "villager_status", "target": "random_working", "status": "sick" },
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "disease_03",
+			"category": "disease",
+			"title": "Spoiled Water",
+			"text": "The morning water smells wrong, sour with leaves and mud.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Boil every pot",
+					"result_text": "The water is safe, though the fire eats through extra wood.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": -2 },
+						{ "type": "resource_delta", "resource": "security", "amount": 1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Risk the stream",
+					"result_text": "Work starts quickly, but one villager turns pale by noon.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": 1 },
+						{ "type": "villager_status", "target": "random_working", "status": "sick" }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 0.95,
+						"duration_days": 1,
+						"label": "Sour stomachs"
+					}
+				}
+			]
+		},
+		{
+			"id": "disease_04",
+			"category": "disease",
+			"title": "Herb Mold",
+			"text": "A bundle of stored herbs has gone soft with pale mold.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Throw it out",
+					"result_text": "The bad bundle is burned before it spreads.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 },
+						{ "type": "resource_delta", "resource": "security", "amount": 1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "recovery",
+						"multiplier": 0.9,
+						"duration_days": 2,
+						"label": "Thin herb stores"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Sort what remains",
+					"result_text": "Careful hands save enough clean herbs for later.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "disease_05",
+			"category": "disease",
+			"title": "Tired Bones",
+			"text": "Several villagers wake stiff and slow after a hard week.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Call a rest hour",
+					"result_text": "The rest steadies the camp and costs a little output.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 },
+						{ "type": "resource_delta", "resource": "wood", "amount": -1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "all",
+						"multiplier": 0.95,
+						"duration_days": 1,
+						"label": "Slower pace"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Push onward",
+					"result_text": "The work continues, and the strain shows.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": 1 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "food_01",
+			"category": "food",
+			"title": "Hidden Roots",
+			"text": "A child finds a patch of edible roots beneath a fallen log.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Dig carefully",
+					"result_text": "The roots come up clean and filling.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 3 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Mark the patch",
+					"result_text": "The village takes less now and keeps the spot easy to find.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 1 },
+						{ "type": "resource_delta", "resource": "security", "amount": 1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 1.1,
+						"duration_days": 2,
+						"label": "Marked root patch"
+					}
+				}
+			]
+		},
+		{
+			"id": "food_02",
+			"category": "food",
+			"title": "Cracked Grain Bin",
+			"text": "A corner of the grain bin splits open, spilling food into the dirt.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Patch it now",
+					"result_text": "The bin is saved with rough planks.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": -2 },
+						{ "type": "resource_delta", "resource": "food", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Scoop what fell",
+					"result_text": "More food is recovered, but the bin stays fragile.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 1 },
+						{ "type": "resource_delta", "resource": "security", "amount": -1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 0.95,
+						"duration_days": 1,
+						"label": "Leaky bin"
+					}
+				}
+			]
+		},
+		{
+			"id": "food_03",
+			"category": "food",
+			"title": "Trader Leftovers",
+			"text": "A passing trader leaves a small sack behind the old stump.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Take the sack",
+					"result_text": "The sack holds dry beans and a little twine.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 2 },
+						{ "type": "resource_delta", "resource": "wood", "amount": 1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Leave a token",
+					"result_text": "The village keeps its manners and its hopes for trade.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 1 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 }
+					],
+					"short_term": {
+						"type": "event_weight_multiplier",
+						"category": "food",
+						"multiplier": 1.1,
+						"duration_days": 2,
+						"label": "Good trade sign"
+					}
+				}
+			]
+		},
+		{
+			"id": "food_04",
+			"category": "food",
+			"title": "Mushroom Patch",
+			"text": "Bright mushrooms push up near the damp stones after rain.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Ask the herbalist",
+					"result_text": "Only the safe caps are kept.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Gather quickly",
+					"result_text": "The baskets fill fast, but one villager regrets tasting early.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 4 },
+						{ "type": "villager_status", "target": "random_working", "status": "sick" }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "food_05",
+			"category": "food",
+			"title": "Ration Argument",
+			"text": "Two families argue over whether the evening portions are fair.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Share evenly",
+					"result_text": "The argument cools, though the stores drop faster.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": -2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Hold rations",
+					"result_text": "The stores last, but the decision stings.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 1 },
+						{ "type": "resource_delta", "resource": "morale", "amount": -2 }
+					],
+					"short_term": {
+						"type": "event_weight_multiplier",
+						"category": "villager_conflict",
+						"multiplier": 1.2,
+						"duration_days": 2,
+						"label": "Tight rations"
+					}
+				}
+			]
+		},
+		{
+			"id": "villager_conflict_01",
+			"category": "villager_conflict",
+			"title": "Watch Blame",
+			"text": "A missing bundle of kindling turns into accusations about last night's watch.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Hear both sides",
+					"result_text": "The truth is dull, but the hearing restores trust.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 },
+						{ "type": "resource_delta", "resource": "wood", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Assign extra watch",
+					"result_text": "The camp feels safer, and the accused guard sleeps poorly.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 2 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "villager_conflict_02",
+			"category": "villager_conflict",
+			"title": "Tool Argument",
+			"text": "The woodcutter and hunter both claim the sharpest axe for the morning.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Give it to woodcutting",
+					"result_text": "Wood comes in faster, while the hunter grumbles.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": 2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "wood",
+						"multiplier": 1.1,
+						"duration_days": 1,
+						"label": "Sharp axe"
+					}
+				},
+				{
+					"id": "b",
+					"label": "Give it to hunting",
+					"result_text": "The hunter brings back meat and promises to share the axe tomorrow.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 }
+					],
+					"short_term": {
+						"type": "risk_delta",
+						"risk_type": "hunter_injury",
+						"amount": 5,
+						"duration_days": 1,
+						"label": "Bold hunting"
+					}
+				}
+			]
+		},
+		{
+			"id": "villager_conflict_03",
+			"category": "villager_conflict",
+			"title": "Shelter Quarrel",
+			"text": "A leaking roof starts a bitter argument about who sleeps by the wall.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Patch the leak",
+					"result_text": "The quarrel ends under a rough new patch.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "wood", "amount": -2 },
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Rotate sleeping spots",
+					"result_text": "The rule is fair enough, but nobody sleeps perfectly.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 1 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": null
+				}
+			]
+		},
+		{
+			"id": "villager_conflict_04",
+			"category": "villager_conflict",
+			"title": "Missing Charm",
+			"text": "A carved charm vanishes from a doorway, and suspicion spreads quickly.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Search together",
+					"result_text": "The charm is found in a blanket fold, and everyone laughs with relief.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 3 },
+						{ "type": "resource_delta", "resource": "food", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Forbid accusations",
+					"result_text": "The camp quiets, but the charm stays missing.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "security", "amount": 1 },
+						{ "type": "resource_delta", "resource": "morale", "amount": -1 }
+					],
+					"short_term": {
+						"type": "event_weight_multiplier",
+						"category": "villager_conflict",
+						"multiplier": 0.85,
+						"duration_days": 2,
+						"label": "Firm words"
+					}
+				}
+			]
+		},
+		{
+			"id": "villager_conflict_05",
+			"category": "villager_conflict",
+			"title": "Forager Boast",
+			"text": "A forager boasts too loudly about carrying the village, and others bristle.",
+			"weight": 100,
+			"options": [
+				{
+					"id": "a",
+					"label": "Praise everyone",
+					"result_text": "The elder names each job around the fire, softening the boast.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "morale", "amount": 2 },
+						{ "type": "resource_delta", "resource": "food", "amount": -1 }
+					],
+					"short_term": null
+				},
+				{
+					"id": "b",
+					"label": "Test the boast",
+					"result_text": "The forager proves useful and comes back exhausted.",
+					"immediate": [
+						{ "type": "resource_delta", "resource": "food", "amount": 3 },
+						{ "type": "villager_status", "target": "random_working", "status": "tired" }
+					],
+					"short_term": {
+						"type": "output_multiplier",
+						"output_type": "food",
+						"multiplier": 1.05,
+						"duration_days": 1,
+						"label": "Forager pride"
+					}
+				}
+			]
+		}
+	]
+}

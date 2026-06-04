@@ -7,6 +7,7 @@ enum Season { SPRING, SUMMER, AUTUMN, WINTER }
 signal day_started(day: int)
 signal night_started(day: int)
 signal season_changed(season: Season)
+signal clock_changed(day: int, phase: Phase, minute_of_day: int)
 
 var day: int = 1
 var phase: Phase = Phase.DAY
@@ -17,11 +18,17 @@ var _day_duration: float = 10.0
 var _night_duration: float = 5.0
 var _days_per_season: int = 5
 var _timer: float = 0.0
+var _last_clock_day: int = -1
+var _last_clock_phase: int = -1
+var _last_clock_minute: int = -1
 
 func setup(day_duration: float, night_duration: float, days_per_season: int) -> void:
 	_day_duration = day_duration
 	_night_duration = night_duration
 	_days_per_season = days_per_season
+	_last_clock_day = -1
+	_last_clock_phase = -1
+	_last_clock_minute = -1
 
 func _process(delta: float) -> void:
 	tick += 1
@@ -30,6 +37,7 @@ func _process(delta: float) -> void:
 	if _timer >= current_duration:
 		_timer = 0.0
 		_advance_phase()
+	_emit_clock_changed_if_needed()
 
 func _advance_phase() -> void:
 	if phase == Phase.DAY:
@@ -43,6 +51,7 @@ func _advance_phase() -> void:
 			current_season = new_season
 			season_changed.emit(current_season)
 		day_started.emit(day)
+	_emit_clock_changed_if_needed()
 
 func _compute_season(d: int) -> Season:
 	return ((d - 1) / _days_per_season) % 4
@@ -56,3 +65,31 @@ func get_season_name() -> String:
 func get_time_left() -> float:
 	var current_duration: float = _day_duration if phase == Phase.DAY else _night_duration
 	return current_duration - _timer
+
+func get_phase_progress() -> float:
+	var current_duration: float = _day_duration if phase == Phase.DAY else _night_duration
+	if current_duration <= 0.0:
+		return 0.0
+	return clampf(_timer / current_duration, 0.0, 0.999999)
+
+func get_minute_of_day() -> int:
+	var offset: int = mini(719, int(floor(get_phase_progress() * 720.0)))
+	if phase == Phase.DAY:
+		return 6 * 60 + offset
+	return (18 * 60 + offset) % (24 * 60)
+
+func get_clock_label() -> String:
+	var minute := get_minute_of_day()
+	return "%02d:%02d" % [minute / 60, minute % 60]
+
+func get_day_clock_label() -> String:
+	return "Day %d - %s %s" % [day, get_season_name(), get_clock_label()]
+
+func _emit_clock_changed_if_needed() -> void:
+	var minute := get_minute_of_day()
+	if day == _last_clock_day and int(phase) == _last_clock_phase and minute == _last_clock_minute:
+		return
+	_last_clock_day = day
+	_last_clock_phase = int(phase)
+	_last_clock_minute = minute
+	clock_changed.emit(day, phase, minute)

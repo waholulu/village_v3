@@ -8,6 +8,8 @@ const NightResolutionScript = preload("res://scripts/sim/night_resolution.gd")
 const WolfThreatSystemScript = preload("res://scripts/sim/wolf_threat_system.gd")
 const PolicyResolverScript = preload("res://scripts/sim/policy_resolver.gd")
 const TaskResolutionScript = preload("res://scripts/sim/task_resolution.gd")
+const EventDeckScript = preload("res://scripts/sim/event_deck.gd")
+const EventEffectsScript = preload("res://scripts/sim/event_effects.gd")
 
 signal game_won()
 signal game_lost(reason: String)
@@ -16,6 +18,11 @@ signal population_changed(current: int, capacity: int)
 signal hunger_changed(hungry_count: int)
 signal monitor_anomalies_changed(anomalies: Array[Dictionary])
 signal wildlife_changed(animals: Array[Dictionary])
+signal event_pending(event: Dictionary)
+signal event_resolved(result: Dictionary)
+signal policy_changed(policy: String, day: int)
+signal daily_summary(summary: Dictionary)
+signal activity_logged(entry: Dictionary)
 
 var store: ResourceStore
 var game_time: GameTime
@@ -25,6 +32,7 @@ var pathfinding: PathfindingService
 var scorer: UtilityScorer
 var monitor: RefCounted
 var nature: RefCounted
+var event_deck: RefCounted
 var _planner: ConstructionPlanner
 
 var villagers: Array[VillagerAgent] = []
@@ -36,6 +44,11 @@ var zero_food_days: int = 0
 var zero_morale_days: int = 0
 var zero_security_days: int = 0
 var active_policy: String = PolicyDefs.default_policy()
+var last_policy_choice_day: int = 0
+var pending_event: Dictionary = {}
+var active_event_effects: Array[Dictionary] = []
+var last_event_result: Dictionary = {}
+var last_event_day: int = 0
 var _fence_count: int = 0
 var _watchtower_count: int = 0
 var _storage_count: int = 0
@@ -62,12 +75,17 @@ func set_logger(logger) -> void:
 	_logger = logger
 
 func _log(data: Dictionary) -> void:
+	var entry := data.duplicate(true)
+	if not entry.has("tick"):
+		entry["tick"] = game_time.tick if game_time else 0
+	if not entry.has("day"):
+		entry["day"] = game_time.day if game_time else 0
+	if not entry.has("phase"):
+		entry["phase"] = game_time.get_phase_name() if game_time else ""
+	activity_logged.emit(entry.duplicate(true))
 	if _logger == null:
 		return
-	data["tick"] = game_time.tick if game_time else 0
-	data["day"] = game_time.day if game_time else 0
-	data["phase"] = game_time.get_phase_name() if game_time else ""
-	_logger.log_event(data)
+	_logger.log_event(entry)
 
 func setup(balance: BalanceData, p_world_gen: WorldGenerator, p_pathfinding: PathfindingService) -> void:
 	_reset_state()
@@ -96,6 +114,9 @@ func setup(balance: BalanceData, p_world_gen: WorldGenerator, p_pathfinding: Pat
 	monitor = SimulationMonitorScript.new()
 	nature = NatureSystemScript.new()
 	nature.setup(balance, p_pathfinding)
+	event_deck = EventDeckScript.new()
+	if not event_deck.load_from_file("res://data/events.json"):
+		push_warning("VillageSimulation: event deck disabled because data/events.json failed to load")
 	_planner = ConstructionPlanner.new()
 	population_capacity = balance.starting_population_capacity
 
@@ -139,6 +160,8 @@ func setup_for_test(wood: int, food: int, villager_count: int) -> void:
 	monitor = SimulationMonitorScript.new()
 	nature = NatureSystemScript.new()
 	nature.setup(balance)
+	event_deck = EventDeckScript.new()
+	event_deck.load_from_file("res://data/events.json")
 	_planner = ConstructionPlanner.new()
 	_balance = balance
 	_task_gen_enabled = false
@@ -159,6 +182,11 @@ func _reset_state() -> void:
 	zero_morale_days = 0
 	zero_security_days = 0
 	active_policy = PolicyDefs.default_policy()
+	last_policy_choice_day = 0
+	pending_event.clear()
+	active_event_effects.clear()
+	last_event_result.clear()
+	last_event_day = 0
 	_fence_count = 0
 	_watchtower_count = 0
 	_storage_count = 0
@@ -172,6 +200,7 @@ func _reset_state() -> void:
 	_task_gen_enabled = true
 	monitor = null
 	nature = null
+	event_deck = null
 	monitor_anomalies.clear()
 	if game_time != null and is_instance_valid(game_time):
 		game_time.queue_free()
@@ -239,7 +268,8 @@ func _apply_wolf_disruption() -> void:
 func _on_day_started(_day: int) -> void:
 	if _game_over:
 		return
-	_resolve_policy_daily_resources()
+	_expire_event_effects_before_day(_day)
+	var policy_summary := _resolve_policy_daily_resources()
 	_resolve_strategic_daily_state()
 	if _game_over:
 		# A strategic loss streak fired during daily resolution above.
@@ -248,6 +278,19 @@ func _on_day_started(_day: int) -> void:
 	if _day > get_days_to_win():
 		end_game_won()
 		return
+	_draw_event_for_day(_day)
+	_decrement_event_effects_after_day(_day)
+	policy_summary["day"] = _day
+	policy_summary["policy"] = active_policy
+	policy_summary["policy_name"] = PolicyDefs.get_display_name(active_policy)
+	policy_summary["resources"] = {
+		"population": store.get_resource("population"),
+		"food": store.get_resource("food"),
+		"wood": store.get_resource("wood"),
+		"security": store.get_resource("security"),
+		"morale": store.get_resource("morale"),
+	}
+	daily_summary.emit(policy_summary)
 	# Purge COMPLETED/CANCELLED tasks so the board doesn't accumulate forever.
 	# Only OPEN/CLAIMED tasks survive — those are the only ones the planner
 	# and scorer ever look at anyway.
@@ -288,7 +331,7 @@ func can_change_policy(day: int = -1) -> bool:
 	var check_day: int = day
 	if check_day < 0 and game_time != null:
 		check_day = game_time.day
-	return PolicyDefs.can_change_on_day(check_day)
+	return PolicyDefs.can_change_on_day(check_day) and last_policy_choice_day != check_day
 
 func set_policy(policy: String) -> bool:
 	if not PolicyDefs.is_valid(policy):
@@ -296,7 +339,43 @@ func set_policy(policy: String) -> bool:
 	if not can_change_policy():
 		return false
 	active_policy = policy
+	last_policy_choice_day = game_time.day if game_time != null else 1
+	policy_changed.emit(active_policy, last_policy_choice_day)
+	_log({
+		"event": "policy_selected",
+		"policy": active_policy,
+		"policy_name": PolicyDefs.get_display_name(active_policy),
+	})
 	return true
+
+func has_pending_event() -> bool:
+	return not pending_event.is_empty()
+
+func resolve_pending_event(option_id: String) -> Dictionary:
+	if pending_event.is_empty():
+		return {
+			"ok": false,
+			"error": "no_pending_event",
+			"option_id": option_id,
+		}
+	var event_id: String = str(pending_event.get("id", ""))
+	var result: Dictionary = EventEffectsScript.apply_option(self, pending_event, option_id)
+	if not bool(result.get("ok", false)):
+		return result
+	pending_event = {}
+	last_event_result = result.duplicate(true)
+	last_event_day = game_time.day if game_time != null else last_event_day
+	_log({
+		"event": "event_resolved",
+		"event_id": event_id,
+		"option_id": option_id,
+		"title": result.get("event_title", ""),
+		"result_text": result.get("result_text", ""),
+		"short_term_started": not (result.get("short_term_started", {}) as Dictionary).is_empty(),
+	})
+	event_resolved.emit(last_event_result.duplicate(true))
+	run_monitor_check()
+	return last_event_result.duplicate(true)
 
 func apply_strategic_resource_delta(resource_name: String, delta: int) -> void:
 	store.add_resource(resource_name, delta)
@@ -358,6 +437,47 @@ func _update_zero_streak(resource_name: String, current_streak: int) -> int:
 	if store.get_resource(resource_name) <= 0:
 		return current_streak + 1
 	return 0
+
+func _draw_event_for_day(day: int) -> void:
+	if event_deck == null or has_pending_event() or last_event_day == day:
+		return
+	if day < 3 or day % 3 != 0:
+		return
+	var event: Dictionary = event_deck.draw_for_day(_balance.world_seed, day, active_event_effects)
+	if event.is_empty():
+		return
+	pending_event = event
+	last_event_day = day
+	_log({
+		"event": "event_drawn",
+		"event_id": pending_event.get("id", ""),
+		"category": pending_event.get("category", ""),
+		"title": pending_event.get("title", ""),
+	})
+	event_pending.emit(pending_event.duplicate(true))
+
+func _expire_event_effects_before_day(day: int) -> void:
+	if active_event_effects.is_empty():
+		return
+	var kept: Array[Dictionary] = []
+	for effect in active_event_effects:
+		if int(effect.get("remaining_days", 0)) > 0:
+			kept.append(effect)
+			continue
+		_log({
+			"event": "event_effect_expired",
+			"type": effect.get("type", ""),
+			"source_event_id": effect.get("source_event_id", ""),
+			"label": effect.get("label", ""),
+			"day": day,
+		})
+	active_event_effects = kept
+
+func _decrement_event_effects_after_day(day: int) -> void:
+	for effect in active_event_effects:
+		if EventEffectsScript.effect_is_active(effect, day):
+			effect["remaining_days"] = maxi(0, int(effect.get("remaining_days", 0)) - 1)
+			effect["last_applied_day"] = day
 
 func _run_construction_planner() -> void:
 	if _planner == null or not _task_gen_enabled:
@@ -489,36 +609,33 @@ func _generate_tasks() -> void:
 	var wood: int = store.get_resource("wood")
 	var season: GameTime.Season = game_time.current_season if game_time else GameTime.Season.SPRING
 	# Cancel surplus open tasks only once stock crosses the *surplus* threshold,
-	# not the *low* threshold. Between low and surplus we leave existing OPEN
-	# tasks alone so idle villagers can keep working — otherwise everyone goes
-	# idle the instant we satisfy the survival floor.
-	if total_food >= _balance.food_surplus_threshold:
+	# or the active policy's higher task target. Between low and cancel target,
+	# existing OPEN tasks remain available so policy intent can keep villagers
+	# visibly working without changing the AI state machine.
+	if total_food >= _food_task_cancel_threshold():
 		_cancel_open_tasks_of_type("gather_food", "food_above_surplus_threshold")
-	if wood >= _balance.wood_surplus_threshold:
+		_cancel_open_tasks_of_type("hunt_deer", "food_above_surplus_threshold")
+	if wood >= _wood_task_cancel_threshold():
 		_cancel_open_tasks_of_type("chop_tree", "wood_above_surplus_threshold")
 	# Berry bushes go dormant in winter — no gather_food tasks in winter season.
-	if total_food < _balance.food_low_threshold and season != GameTime.Season.WINTER:
+	var food_task_limit := _food_task_generation_limit(total_food)
+	if food_task_limit > 0 and season != GameTime.Season.WINTER:
 		_try_create_resource_tasks_limited(
 			"gather_food",
-			world_gen.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH)
+			world_gen.get_tiles_of_type(WorldGenerator.TileType.BERRY_BUSH),
+			food_task_limit
 		)
 	# Hunt only while food is below surplus. Existing OPEN hunt tasks are
 	# cancelled once food is plentiful; CLAIMED hunters finish their current run.
-	if total_food >= _balance.food_surplus_threshold:
-		_cancel_open_tasks_of_type("hunt_deer", "food_above_surplus_threshold")
-	if nature != null and total_food < _balance.food_surplus_threshold:
-		for animal in nature.animals:
-			var a: WildlifeAgent = animal as WildlifeAgent
-			if a == null or a.kind != WildlifeAgent.Kind.DEER:
-				continue
-			var dist: float = Vector2(a.tile_position).distance_to(Vector2(WorldGenerator.HUT_POS))
-			if dist <= float(_balance.deer_hunt_radius) and not board.has_task_for_tile(a.tile_position):
-				# target == approach (Task._init defaults approach_tile to target).
-				board.create_task("hunt_deer", a.tile_position, game_time.tick)
-	if wood < _balance.wood_low_threshold:
+	var hunt_task_limit := _hunt_task_generation_limit(total_food)
+	if hunt_task_limit > 0:
+		_try_create_hunt_tasks_limited(hunt_task_limit)
+	var wood_task_limit := _wood_task_generation_limit(wood)
+	if wood_task_limit > 0:
 		_try_create_resource_tasks_limited(
 			"chop_tree",
-			world_gen.get_tiles_of_type(WorldGenerator.TileType.TREE)
+			world_gen.get_tiles_of_type(WorldGenerator.TileType.TREE),
+			wood_task_limit
 		)
 	if active_policy == PolicyDefs.DEFENSE_FIRST and store.get_resource("security") < 60:
 		_try_create_walkable_task("guard_watch", WorldGenerator.CAMPFIRE_POS)
@@ -536,8 +653,8 @@ func _try_create_resource_task(task_type: String, target_tile: Vector2i) -> void
 	var task = board.create_task(task_type, target_tile, game_time.tick)
 	task.approach_tile = adj
 
-func _try_create_resource_tasks_limited(task_type: String, target_tiles: Array[Vector2i]) -> void:
-	var limit: int = maxi(1, _balance.max_open_resource_tasks_per_type)
+func _try_create_resource_tasks_limited(task_type: String, target_tiles: Array[Vector2i], limit_override: int = -1) -> void:
+	var limit: int = maxi(1, limit_override if limit_override > 0 else _balance.max_open_resource_tasks_per_type)
 	var active_count := _count_active_tasks_of_type(task_type)
 	if active_count >= limit:
 		return
@@ -557,12 +674,74 @@ func _try_create_resource_tasks_limited(task_type: String, target_tiles: Array[V
 		if board._tasks.size() > before:
 			active_count += 1
 
+func _try_create_hunt_tasks_limited(limit_override: int = -1) -> void:
+	if nature == null:
+		return
+	var limit: int = maxi(1, limit_override if limit_override > 0 else _balance.max_open_resource_tasks_per_type)
+	var active_count := _count_active_tasks_of_type("hunt_deer")
+	if active_count >= limit:
+		return
+	var candidates: Array[WildlifeAgent] = []
+	for animal in nature.animals:
+		var a: WildlifeAgent = animal as WildlifeAgent
+		if a == null or a.kind != WildlifeAgent.Kind.DEER:
+			continue
+		var dist: float = Vector2(a.tile_position).distance_to(Vector2(WorldGenerator.HUT_POS))
+		if dist <= float(_balance.deer_hunt_radius) and not board.has_task_for_tile(a.tile_position):
+			candidates.append(a)
+	candidates.sort_custom(func(a: WildlifeAgent, b: WildlifeAgent) -> bool:
+		var da := a.tile_position.distance_squared_to(WorldGenerator.HUT_POS)
+		var db := b.tile_position.distance_squared_to(WorldGenerator.HUT_POS)
+		if da == db:
+			return a.tile_position.y < b.tile_position.y if a.tile_position.x == b.tile_position.x else a.tile_position.x < b.tile_position.x
+		return da < db
+	)
+	for deer in candidates:
+		if active_count >= limit:
+			return
+		# target == approach (Task._init defaults approach_tile to target).
+		board.create_task("hunt_deer", deer.tile_position, game_time.tick)
+		active_count += 1
+
 func _count_active_tasks_of_type(task_type: String) -> int:
 	var count := 0
 	for task in board._tasks:
 		if task.type == task_type and (task.status == Task.Status.OPEN or task.status == Task.Status.CLAIMED):
 			count += 1
 	return count
+
+func _policy_wants_food_tasks() -> bool:
+	return active_policy == PolicyDefs.FOOD_FIRST or active_policy == PolicyDefs.EXPLORE_FOREST
+
+func _policy_wants_wood_tasks() -> bool:
+	return active_policy == PolicyDefs.WOOD_FIRST or active_policy == PolicyDefs.EXPLORE_FOREST
+
+func _food_task_cancel_threshold() -> int:
+	return _balance.policy_food_task_target if _policy_wants_food_tasks() else _balance.food_surplus_threshold
+
+func _wood_task_cancel_threshold() -> int:
+	return _balance.policy_wood_task_target if _policy_wants_wood_tasks() else _balance.wood_surplus_threshold
+
+func _food_task_generation_limit(total_food: int) -> int:
+	if total_food < _balance.food_low_threshold:
+		return _balance.max_open_resource_tasks_per_type
+	if _policy_wants_food_tasks() and total_food < _balance.policy_food_task_target:
+		return _balance.max_policy_open_tasks_per_type
+	return 0
+
+func _hunt_task_generation_limit(total_food: int) -> int:
+	if total_food < _balance.food_surplus_threshold:
+		return _balance.max_open_resource_tasks_per_type
+	if _policy_wants_food_tasks() and total_food < _balance.policy_food_task_target:
+		return _balance.max_policy_open_tasks_per_type
+	return 0
+
+func _wood_task_generation_limit(wood: int) -> int:
+	if wood < _balance.wood_low_threshold:
+		return _balance.max_open_resource_tasks_per_type
+	if _policy_wants_wood_tasks() and wood < _balance.policy_wood_task_target:
+		return _balance.max_policy_open_tasks_per_type
+	return 0
 
 func _try_create_walkable_task(task_type: String, target_tile: Vector2i) -> void:
 	if board.has_active_task_of_type(task_type):

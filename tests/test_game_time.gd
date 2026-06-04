@@ -62,3 +62,25 @@ func test_get_phase_name_day() -> void:
 func test_get_phase_name_night() -> void:
 	gt._advance_phase()
 	assert_eq(gt.get_phase_name(), "Night")
+
+func test_clock_label_starts_at_six() -> void:
+	assert_eq(gt.get_clock_label(), "06:00")
+	assert_eq(gt.get_day_clock_label(), "Day 1 - Spring 06:00")
+
+func test_clock_label_noon_halfway_through_day() -> void:
+	gt._process(5.0)
+	assert_eq(gt.get_clock_label(), "12:00")
+
+func test_clock_label_night_starts_at_eighteen() -> void:
+	gt._advance_phase()
+	assert_eq(gt.get_clock_label(), "18:00")
+
+func test_clock_label_wraps_after_midnight() -> void:
+	gt._advance_phase()
+	gt._process(2.5)
+	assert_eq(gt.get_clock_label(), "00:00")
+
+func test_clock_changed_signal_emitted_when_minute_changes() -> void:
+	watch_signals(gt)
+	gt._process(0.02)
+	assert_signal_emitted(gt, "clock_changed")

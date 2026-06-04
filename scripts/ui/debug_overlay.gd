@@ -1,10 +1,15 @@
 extends CanvasLayer
 
+const PixelThemeScript = preload("res://scripts/ui/pixel_theme.gd")
+
 @onready var _panel: Panel = $Panel
 @onready var _lbl: Label = $Panel/LblDebug
 
 var _sim: VillageSimulation
 var _monitor_anomalies: Array[Dictionary] = []
+
+func _ready() -> void:
+	_panel.theme = PixelThemeScript.build()
 
 func setup(sim: VillageSimulation) -> void:
 	_sim = sim
@@ -50,6 +55,16 @@ func _build_debug_text() -> String:
 	lines.append("Zero streaks F/M/S: %d/%d/%d" % [
 		zero_streaks["food"], zero_streaks["morale"], zero_streaks["security"]
 	])
+	lines.append("")
+	var pending_event: Dictionary = snapshot.get("pending_event", {})
+	if pending_event.is_empty():
+		lines.append("Event: none pending")
+	else:
+		lines.append("Event: %s [%s]" % [pending_event.get("title", ""), pending_event.get("category", "")])
+	lines.append("Active event effects: %d" % (snapshot.get("active_event_effects", []) as Array).size())
+	var last_result: Dictionary = snapshot.get("last_event_result", {})
+	if not last_result.is_empty():
+		lines.append("Last event: %s / %s" % [last_result.get("event_title", ""), last_result.get("option_label", "")])
 	lines.append("")
 	lines.append("Tasks open: %d" % tasks["open"])
 	lines.append("Tasks claimed: %d" % tasks["claimed"])

@@ -1,6 +1,8 @@
 class_name PolicyResolver
 extends RefCounted
 
+const EventEffectsScript = preload("res://scripts/sim/event_effects.gd")
+
 static func resolve_daily(sim: VillageSimulation) -> Dictionary:
 	if sim.store == null or sim._balance == null:
 		return {}
@@ -27,7 +29,13 @@ static func resolve_daily(sim: VillageSimulation) -> Dictionary:
 					sim.store.add_stored_food(stored_food_gained)
 					summary["stored_food"] += stored_food_gained
 				summary["food"] += amount
-				if v.job == JobDefs.HUNTER and roll_percent(sim, "hunter_injury", v.id) < sim._balance.hunter_injury_chance_percent:
+				var injury_chance := EventEffectsScript.modified_risk_chance(
+					sim.active_event_effects,
+					"hunter_injury",
+					sim._balance.hunter_injury_chance_percent,
+					sim.game_time.day
+				)
+				if v.job == JobDefs.HUNTER and roll_percent(sim, "hunter_injury", v.id) < injury_chance:
 					v.status = VillagerAgent.Status.INJURED
 					summary["injured"] += 1
 			"wood":
@@ -49,10 +57,13 @@ static func modified_output_amount(sim: VillageSimulation, v: VillagerAgent, out
 	var amount: float = float(base)
 	amount *= JobDefs.status_output_multiplier(v.status)
 	amount *= PolicyDefs.output_multiplier(sim.active_policy, output_type)
+	amount *= EventEffectsScript.output_multiplier(sim.active_event_effects, output_type, sim.game_time.day)
 	return maxi(0, int(round(amount)))
 
 static func modified_recovery_chance(sim: VillageSimulation) -> int:
-	return mini(100, int(round(float(sim._balance.herbalist_recovery_chance_percent) * PolicyDefs.output_multiplier(sim.active_policy, "recovery"))))
+	var chance := int(round(float(sim._balance.herbalist_recovery_chance_percent) * PolicyDefs.output_multiplier(sim.active_policy, "recovery")))
+	chance = EventEffectsScript.modified_risk_chance(sim.active_event_effects, "herbalist_recovery", chance, sim.game_time.day)
+	return mini(100, chance)
 
 static func find_recoverable_villager(sim: VillageSimulation) -> VillagerAgent:
 	for v in sim.villagers:
