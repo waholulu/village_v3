@@ -34,6 +34,7 @@ static func build(sim: VillageSimulation) -> Dictionary:
 		"phase": sim.game_time.get_phase_name(),
 		"tick": sim.game_time.tick,
 		"time_left": sim.game_time.get_time_left(),
+		"world_seed": sim._balance.world_seed,
 		"active_policy": sim.active_policy,
 		"active_policy_name": PolicyDefs.get_display_name(sim.active_policy),
 		"last_policy_choice_day": sim.last_policy_choice_day,

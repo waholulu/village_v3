@@ -39,6 +39,7 @@ func _build_debug_text() -> String:
 	lines.append("=== DEBUG (F3) ===")
 	lines.append("Day: %d / %d  %s" % [snapshot["day"], snapshot["days_to_win"], snapshot.get("season", "Spring")])
 	lines.append("Phase: %s" % snapshot["phase"])
+	lines.append("Seed: %d" % snapshot["world_seed"])
 	lines.append("Policy: %s" % snapshot["active_policy_name"])
 	lines.append("Tick: %d" % snapshot["tick"])
 	lines.append("Time left: %.1fs" % snapshot["time_left"])
@@ -61,7 +62,14 @@ func _build_debug_text() -> String:
 		lines.append("Event: none pending")
 	else:
 		lines.append("Event: %s [%s]" % [pending_event.get("title", ""), pending_event.get("category", "")])
-	lines.append("Active event effects: %d" % (snapshot.get("active_event_effects", []) as Array).size())
+	var active_effects: Array = snapshot.get("active_event_effects", [])
+	lines.append("Active event effects: %d" % active_effects.size())
+	for effect in active_effects:
+		lines.append("  %s [%s] %dd" % [
+			effect.get("label", effect.get("type", "effect")),
+			effect.get("type", "effect"),
+			effect.get("remaining_days", 0),
+		])
 	var last_result: Dictionary = snapshot.get("last_event_result", {})
 	if not last_result.is_empty():
 		lines.append("Last event: %s / %s" % [last_result.get("event_title", ""), last_result.get("option_label", "")])

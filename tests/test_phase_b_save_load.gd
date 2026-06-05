@@ -113,6 +113,8 @@ func test_save_file_omits_derived_fields() -> void:
 	assert_true(data.has("fresh_food"), "Phase 1: food split into fresh + stored")
 	assert_false(data.has("food"), "old 'food' key must not appear in new saves")
 	assert_true(data.has("strategic_resources"), "strategic resources are saved as one grouped field")
+	assert_true(data.has("phase_elapsed_seconds"), "current phase progress is required for deterministic load")
+	assert_true(data.has("world_seed"), "run seed is required for deterministic load")
 
 func test_save_load_preserves_strategic_state() -> void:
 	sim.store.set_resource("population", 8)
@@ -145,3 +147,77 @@ func test_save_load_preserves_villager_status() -> void:
 	sim.villagers[0].status = VillagerAgent.Status.HEALTHY
 	assert_true(sm.load_into(sim))
 	assert_eq(sim.villagers[0].status, VillagerAgent.Status.DEAD)
+
+func test_save_load_preserves_clock_progress_and_derives_season() -> void:
+	sim.game_time.restore_state(16, GameTime.Phase.NIGHT, 42, 2.5)
+	var sm := SaveManager.new()
+	sm.save(sim)
+	sim.game_time.restore_state(1, GameTime.Phase.DAY, 0, 0.0)
+	assert_true(sm.load_into(sim))
+	assert_eq(sim.game_time.day, 16)
+	assert_eq(sim.game_time.phase, GameTime.Phase.NIGHT)
+	assert_eq(sim.game_time.tick, 42)
+	assert_eq(sim.game_time.current_season, GameTime.Season.WINTER)
+	assert_eq(sim.game_time.get_phase_elapsed_seconds(), 2.5)
+
+func test_loaded_run_resolves_next_day_deterministically() -> void:
+	sim.game_time.restore_state(5, GameTime.Phase.NIGHT, 77, 2.0)
+	sim.active_policy = PolicyDefs.WOOD_FIRST
+	sim.last_policy_choice_day = 1
+	sim.last_event_day = 3
+	sim.active_event_effects.append({
+		"type": "output_multiplier",
+		"output_type": "food",
+		"multiplier": 0.5,
+		"label": "Thin harvest",
+		"duration_days": 2,
+		"remaining_days": 2,
+		"starts_on_day": 6,
+	})
+	var sm := SaveManager.new()
+	sm.save(sim)
+
+	sim.game_time._process(3.0)
+	var expected := _daily_fingerprint()
+
+	sim._balance.world_seed = 999999
+	assert_true(sm.load_into(sim))
+	sim.game_time._process(3.0)
+	var actual := _daily_fingerprint()
+	for key in expected:
+		assert_eq(actual[key], expected[key], "Next-day state mismatch for %s" % key)
+
+func _daily_fingerprint() -> Dictionary:
+	var statuses: Array[String] = []
+	for villager in sim.villagers:
+		statuses.append(villager.get_status_name())
+	return {
+		"day": sim.game_time.day,
+		"phase": sim.game_time.get_phase_name(),
+		"season": sim.game_time.get_season_name(),
+		"tick": sim.game_time.tick,
+		"phase_elapsed_seconds": sim.game_time.get_phase_elapsed_seconds(),
+		"world_seed": sim._balance.world_seed,
+		"food": sim.store.get_resource("food"),
+		"wood": sim.store.get_resource("wood"),
+		"security": sim.store.get_resource("security"),
+		"morale": sim.store.get_resource("morale"),
+		"zero_food_days": sim.zero_food_days,
+		"zero_morale_days": sim.zero_morale_days,
+		"zero_security_days": sim.zero_security_days,
+		"pending_event_id": sim.pending_event.get("id", ""),
+		"last_event_day": sim.last_event_day,
+		"active_event_effects": _active_effect_fingerprint(),
+		"statuses": statuses,
+	}
+
+func _active_effect_fingerprint() -> Array[Dictionary]:
+	var effects: Array[Dictionary] = []
+	for effect in sim.active_event_effects:
+		effects.append({
+			"type": str(effect.get("type", "")),
+			"label": str(effect.get("label", "")),
+			"remaining_days": int(effect.get("remaining_days", 0)),
+			"starts_on_day": int(effect.get("starts_on_day", 0)),
+		})
+	return effects

@@ -84,3 +84,12 @@ func test_clock_changed_signal_emitted_when_minute_changes() -> void:
 	watch_signals(gt)
 	gt._process(0.02)
 	assert_signal_emitted(gt, "clock_changed")
+
+func test_restore_state_preserves_clock_progress_and_derives_season() -> void:
+	gt.restore_state(16, GameTime.Phase.NIGHT, 42, 2.5)
+	assert_eq(gt.day, 16)
+	assert_eq(gt.phase, GameTime.Phase.NIGHT)
+	assert_eq(gt.tick, 42)
+	assert_eq(gt.current_season, GameTime.Season.WINTER)
+	assert_eq(gt.get_phase_elapsed_seconds(), 2.5)
+	assert_eq(gt.get_clock_label(), "00:00")

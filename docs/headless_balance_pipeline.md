@@ -40,11 +40,15 @@ Default gates are intentionally small and repeatable:
 - Final strategic food is not runaway-high.
 - Negative task-claim rate stays near zero.
 - Daily task-cancellation bursts stay bounded.
-- Default preset sweep over seeds `4312..4321` wins at least `7/10`.
+- No resource or loss-streak counter goes negative.
+- Default preset sweep over seeds `4312..4331` wins at least `14/20`.
+- That sweep includes at least one win and at least one loss.
 - Winning runs in that sweep average `20-40%` villager deaths.
+- All 25 event cards appear across the default sweep.
 
-The report also records per-run dead population, death rate, and whether
-strategic and visible population diverged.
+The report also records per-run dead population, death rate, event-card
+coverage, negative resource/streak findings, and whether strategic and visible
+population diverged.
 
 ## 3. Adjust One Lever
 
@@ -68,11 +72,12 @@ Run the focused tests for touched systems first, then the full deterministic
 audit:
 
 ```powershell
-& E:\godot\Godot_v4.6.3-stable_win64_console.exe --headless --path . -s res://addons/gut/gut_cmdln.gd -- -gdir=res://tests -gexit
+& E:\godot\Godot_v4.6.3-stable_win64_console.exe --headless --path . -s res://addons/gut/gut_cmdln.gd -- "-gdir=res://tests" "-gexit"
 .\tools\headless_audit.ps1 -Strict
 ```
 
 If `-Strict` fails, keep the report and tune the next smallest lever instead
 of stacking unrelated changes. When the failure is in the death-rate gate,
-inspect `audit_report.json -> seed_sweep` first; converting one high-death loss
-into a win is often better than globally making every run harsher.
+inspect `audit_report.json -> seed_sweep` first. When event-card coverage
+fails, inspect `audit_report.json -> event_cards.missing_ids` before changing
+weights; the 20-seed sweep should normally cover the full MVP deck.

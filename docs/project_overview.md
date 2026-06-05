@@ -10,7 +10,7 @@ see `CLAUDE.md`. For repeatable headless tuning, see
 
 A small, observable, deterministic Godot 4 village survival MVP:
 
-- Strategic village state starts with population 5, food 40, wood 25,
+- Strategic village state starts with population 5, food 50, wood 25,
   security 50, and morale 60.
 - 5 visible villagers remain autonomous as the execution layer for the
   policy/event MVP, matching strategic population at default start.
@@ -60,10 +60,11 @@ After adding any new `.gd` with a `class_name`, run `--import` first.
 
 ## Test And Audit Status
 
-Latest run: **243 GUT tests, all passing**. Default strict headless audit
-passes with a day 61 win, 0 monitor anomalies, 10/10 sweep wins, and winning
-average death rate `0.22`. Every simulation rule change must land with a
-focused test and a strict audit pass — see Phase A/B/C/D regression tests
+Latest run: **292 GUT tests, all passing**. Default strict headless audit
+passes with a day 61 win, 0 monitor anomalies, `14/20` sweep wins,
+`6/20` sweep losses, winning average death rate `0.3857`, all 25 event cards
+covered, and 0 negative resource/streak findings. Every simulation rule
+change must land with a focused test and a strict audit pass — see Phase A/B/C/D regression tests
 (`tests/test_phase_*_*.gd`) as templates.
 
 ## Controls (live play)
@@ -136,13 +137,15 @@ set_point_walkable → tile_changed.emit → store.add_resource) and the
 
 | Key | Value |
 |---|---|
-| starting_population / starting_food | 5 / 40 |
+| starting_population / starting_food | 5 / 50 |
 | starting_wood / starting_security / starting_morale | 25 / 50 / 60 |
 | visible villagers / strategic run length | 5 / 60 days |
-| wood_per_tree / food_per_bush | 4 / 2 |
+| wood_per_tree / food_per_bush | 4 / 3 |
 | food / wood low_threshold | 6 / 6 |
 | food / wood surplus_threshold | 20 / 12 |
-| max_campfire_out_nights | 3 |
+| policy_food_task_target / policy_wood_task_target | 60 / 31 |
+| hunter_injury_chance / herbalist_recovery_chance | 25% / 30% |
+| max_campfire_out_nights | 5 |
 | max_hunger | 3 |
 | wolf_threat_radius | 10 |
 

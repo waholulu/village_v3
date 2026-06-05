@@ -59,6 +59,25 @@ func _compute_season(d: int) -> Season:
 func get_phase_name() -> String:
 	return "Day" if phase == Phase.DAY else "Night"
 
+func get_phase_elapsed_seconds() -> float:
+	return _timer
+
+func restore_state(
+	saved_day: int,
+	saved_phase: Phase,
+	saved_tick: int,
+	phase_elapsed_seconds: float
+) -> void:
+	day = maxi(1, saved_day)
+	phase = saved_phase
+	tick = maxi(0, saved_tick)
+	current_season = _compute_season(day)
+	var current_duration: float = _day_duration if phase == Phase.DAY else _night_duration
+	_timer = clampf(phase_elapsed_seconds, 0.0, current_duration)
+	_last_clock_day = -1
+	_last_clock_phase = -1
+	_last_clock_minute = -1
+
 func get_season_name() -> String:
 	return ["Spring", "Summer", "Autumn", "Winter"][int(current_season)]
 

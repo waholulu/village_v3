@@ -4,16 +4,16 @@
   "starting_stored_food": 12,
   "villager_count": 5,
   "starting_population": 5,
-  "starting_food": 40,
+  "starting_food": 50,
   "starting_security": 50,
   "starting_morale": 60,
   "zero_resource_loss_days": 3,
   "days_per_season": 15,
-  "hunter_injury_chance_percent": 35,
+  "hunter_injury_chance_percent": 25,
   "herbalist_recovery_chance_percent": 30,
 
   "wood_per_tree": 4,
-  "food_per_bush": 2,
+  "food_per_bush": 3,
 
   "food_consumed_per_villager_per_night": 2,
   "wood_consumed_by_campfire_per_night": 3,
@@ -24,14 +24,14 @@
   "wood_low_threshold": 6,
   "food_surplus_threshold": 20,
   "wood_surplus_threshold": 12,
-  "policy_food_task_target": 48,
+  "policy_food_task_target": 60,
   "policy_wood_task_target": 31,
   "max_policy_open_tasks_per_type": 3,
 
   "day_duration_seconds": 10.0,
   "night_duration_seconds": 5.0,
 
-  "max_campfire_out_nights": 3,
+  "max_campfire_out_nights": 5,
   "villager_move_interval": 0.5,
 
   "starting_population_capacity": 5,

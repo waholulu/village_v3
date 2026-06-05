@@ -12,6 +12,8 @@ func save(sim: VillageSimulation) -> void:
 		"day": sim.game_time.day,
 		"phase": sim.game_time.get_phase_name(),
 		"tick": sim.game_time.tick,
+		"phase_elapsed_seconds": sim.game_time.get_phase_elapsed_seconds(),
+		"world_seed": sim._balance.world_seed,
 		"wood": sim.store.get_resource("wood"),
 		"fresh_food": sim.store.get_resource("fresh_food"),
 		"stored_food": sim.store.get_resource("stored_food"),
@@ -74,6 +76,7 @@ func load_into(sim: VillageSimulation) -> bool:
 		push_error("Save file parse error")
 		return false
 	var data: Dictionary = json.get_data()
+	sim._balance.world_seed = int(data.get("world_seed", sim._balance.world_seed))
 
 	# Resources first — store.setup() emits stock_changed so HUD refreshes.
 	# Backward compat: pre-Phase-1 saves with top-level "food" load as food.
@@ -101,9 +104,13 @@ func load_into(sim: VillageSimulation) -> bool:
 	sim._wolf_threat_count = data.get("wolf_threat_count", 0)
 	if sim.nature != null:
 		sim.nature.load_save_data(data.get("nature", {}))
-	sim.game_time.day = data["day"]
-	sim.game_time.tick = data["tick"]
-	sim.game_time.phase = GameTime.Phase.DAY if data["phase"] == "Day" else GameTime.Phase.NIGHT
+	var loaded_phase: GameTime.Phase = GameTime.Phase.DAY if data["phase"] == "Day" else GameTime.Phase.NIGHT
+	sim.game_time.restore_state(
+		int(data["day"]),
+		loaded_phase,
+		int(data["tick"]),
+		float(data.get("phase_elapsed_seconds", 0.0))
+	)
 
 	# Restore the world grid. set_tile keeps WorldGenerator._tile_index in
 	# sync; the pathfinding rebuild below picks up the new walkability.

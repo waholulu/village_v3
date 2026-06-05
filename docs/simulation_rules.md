@@ -12,7 +12,7 @@ For higher-level project framing and the multi-phase outline, see
 
 - Strategic MVP resources now exist in `ResourceStore`: `population`, `food`,
   `wood`, `security`, and `morale`. Default strategic start is population 5,
-  food 40, wood 25, security 50, morale 60.
+  food 50, wood 25, security 50, morale 60.
 - Resource values clamp at zero on direct set/add/consume paths.
 - `food` is the authoritative food total. `fresh_food` and `stored_food` are
   compatibility buckets for spoilage, logs, and save/load; their sum is kept
@@ -68,17 +68,19 @@ For higher-level project framing and the multi-phase outline, see
 - Job effects currently apply to strategic daily output and task scoring:
   - Farmer: produces food and prefers `gather_food`.
   - Hunter: produces food, prefers `hunt_deer`, and can become injured from a
-    deterministic daily risk roll.
+    deterministic daily risk roll (`hunter_injury_chance_percent = 25` in the
+    default preset).
   - Woodcutter: produces wood and prefers `chop_tree`.
   - Guard: produces security and prefers guard / defense tasks.
   - Herbalist: can recover one injured or sick villager with a deterministic
-    daily roll.
+    daily roll (`herbalist_recovery_chance_percent = 30` in the default
+    preset).
 - Each day start resolves the Phase 2 strategic bridge before loss-streak
   checks: apply visible-villager job output modified by status and policy.
   Food is consumed by the nightly per-villager hunger pass, not by a second
   abstract daily drain.
 - During the day, the active policy can keep a small visible task queue alive
-  above the survival floor: `food_first` targets food 48, `wood_first` targets
+  above the survival floor: `food_first` targets food 60, `wood_first` targets
   wood 31, and `explore_forest` targets both. Policy-driven resource queues
   are capped at 3 active tasks per type.
 - The daily bridge uses deterministic hash rolls based on `world_seed`, day,
@@ -86,7 +88,7 @@ For higher-level project framing and the multi-phase outline, see
 - Resource tasks now also update the matching strategic resource:
   `gather_food` and `hunt_deer` add strategic `food`, and `chop_tree` adds
   strategic `wood`.
-- Default map task yields are `wood_per_tree = 4`, `food_per_bush = 2`, and
+- Default map task yields are `wood_per_tree = 4`, `food_per_bush = 3`, and
   `food_per_deer = 3` before job/status/policy/event modifiers.
 - Successful daily food jobs add their full food output to `stored_food`, which
   also increases authoritative `food`. Map harvesting and hunting add
@@ -112,8 +114,8 @@ For higher-level project framing and the multi-phase outline, see
 - The current simulation attempts one event every third day starting on day 3.
   It never draws while another event is pending, and `last_event_day` prevents
   multiple events from triggering on the same day.
-- Live play does not auto-resolve pending events. Phase 4 UI will expose player
-  choices. The headless runner resolves pending events immediately with a
+- Live play does not auto-resolve pending events. The blocking event UI exposes
+  player choices. The headless runner resolves pending events immediately with a
   deterministic option hash so audits and long runs continue unattended.
 - Immediate supported effects:
   - `resource_delta`: changes a strategic resource through the normal
@@ -206,7 +208,7 @@ implication (no second-tier scheduling).
 - Cancel open gather_food when `food >= food_surplus_threshold` (default 20).
 - Same pattern for chop_tree with `wood_low/surplus_threshold`.
 - If the active policy wants that resource, the cancel target rises to the
-  policy target instead (`policy_food_task_target = 48`,
+  policy target instead (`policy_food_task_target = 60`,
   `policy_wood_task_target = 31`), and generation uses
   `max_policy_open_tasks_per_type = 3` until the policy target is met.
 - The gap between low and surplus lets idle villagers consume existing
@@ -321,7 +323,7 @@ In `_on_night_started`:
    `dead`, released from work, and strategic `population` decreases by 1.
 2. Campfire wood consumption: `wood_consumed_by_campfire_per_night`.
    If shortfall, `campfire_out_nights += 1`. If `campfire_out_nights >=
-   max_campfire_out_nights` (default preset: 3), emit `game_lost("Campfire out for N
+   max_campfire_out_nights` (default preset: 5), emit `game_lost("Campfire out for N
    consecutive nights")`.
 3. `_apply_food_spoilage` against storage capacity.
 4. `nature.check_wolf_threat` → if true, `_apply_wolf_disruption`
@@ -340,10 +342,11 @@ In `_on_night_started`:
 
 - `SaveManager.save()` writes the full current grid as `tiles`, plus
   legacy food fields, grouped strategic resources, active policy,
-  zero-resource streaks, day/phase, villager positions + hunger + names +
-  job + status, pending event id, active event effects, last event result, and
-  `_wolf_threat_count`. **No tasks, no buildings list, no derived
-  building counters** — all reconstructed from the grid.
+  zero-resource streaks, run seed, day/phase/tick/current-phase elapsed time,
+  villager positions + hunger + names + job + status, pending event id, active
+  event effects, last event result, and `_wolf_threat_count`. **No tasks, no
+  buildings list, no derived building counters** — all reconstructed from the
+  grid.
 - `load_into()`:
   - Sets legacy resources via `store.setup()` and strategic resources via
     `store.setup_strategic()`; both emit `stock_changed` so HUD refreshes.
@@ -352,6 +355,9 @@ In `_on_night_started`:
   - Restores active policy.
   - Restores pending event from the event deck, active event effects,
     `last_event_result`, and `last_event_day`.
+  - Restores exact current-phase clock progress and derives the current season
+    from the restored day. Restores the run seed used by event, job-risk, and
+    recovery rolls, so the next daily resolution remains deterministic.
   - Restores grid via `world_gen.set_tile()` for each cell.
   - Recomputes `_fence_count` / `_watchtower_count` / `_storage_count`
     from tile counts.
@@ -404,10 +410,12 @@ Run `tools/headless_audit.ps1` after balance or simulation-rule changes. It
 executes the deterministic headless runner, parses the raw Godot log plus JSONL
 action log, and emits `.godot/headless_audit/<run>/audit_report.json` with
 result, resource ranges, negative task claims, cancellation bursts, death
-counts/rates, population mismatch, and gate results. Default preset audits also
-run a fixed 10-seed sweep (`4312..4321`) and gate on both win count and
-winning average death rate. `HeadlessRunner` accepts `seed=<int>` on the CLI
-for single-seed reproduction. See `docs/headless_balance_pipeline.md` for the
+counts/rates, event-card coverage, negative resource/streak findings,
+population mismatch, and gate results. Default preset audits also run a fixed
+20-seed sweep (`4312..4331`) and gate on win count, win/loss presence, winning
+average death rate, all 25 event cards appearing, and no negative resource or
+streak counters. `HeadlessRunner` accepts `seed=<int>` on the CLI for
+single-seed reproduction. See `docs/headless_balance_pipeline.md` for the
 repeatable tuning loop.
 
 ## Debug snapshot
@@ -437,8 +445,9 @@ repeatable tuning loop.
 - `VillageSimulation` emits `policy_changed`, `daily_summary`, and
   `activity_logged` as observation signals for the player-facing UI. These do
   not alter simulation state or headless JSONL content.
-- DebugOverlay shows pending event title/category, active event-effect count,
-  and the last resolved event option.
+- DebugOverlay shows the run seed, pending event title/category, each active
+  event effect with type and remaining days, and the last resolved event
+  option.
 - Both HUD and DebugOverlay are pure signal-driven — no per-frame polling of
   simulation state by UI scripts. The HUD clock refreshes from `GameTime`'s
   clock signal.

@@ -23,8 +23,15 @@ map/pathfinding/AI code. Keep it, but cap what it is allowed to become.
 Current tuning workflow: run `.\tools\headless_audit.ps1 -Strict` after any
 default balance or simulation-rule change. The audit must keep the default
 preset winning on day 61, monitor anomalies at 0, negative task claims near
-zero, and cancellation bursts bounded. Hard preset audits are useful reports
-but hard is allowed to lose.
+zero, cancellation bursts bounded, no negative resource/streak counters, all
+25 event cards covered, and the 20-seed default sweep inside the locked win /
+death-rate range. Hard preset audits are useful reports but hard is allowed
+to lose.
+
+Current status (2026-06-05): Phase 5 balance and MVP lock is implemented and
+verified. The locked default strict audit wins `14/20` seeds (`4312..4331`),
+keeps `6/20` losses, has winning average death rate `0.3857`, covers all 25
+event cards, and reports 0 negative resource/streak findings.
 
 One implementation principle matters more than the exact class names below:
 do not build a second simulation beside the current one. Prefer adapting
@@ -332,7 +339,7 @@ Rules:
 
 - Initial default state:
   - population: 5
-  - food: 40
+  - food: 50
   - wood: 25
   - security: 50
   - morale: 60

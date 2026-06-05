@@ -13,7 +13,7 @@ func test_initial_strategic_state_matches_mvp_defaults() -> void:
 	var balance := BalanceData.new()
 	var sim := _setup_world_sim(balance)
 	assert_eq(sim.store.get_resource("population"), 5)
-	assert_eq(sim.store.get_resource("food"), 40)
+	assert_eq(sim.store.get_resource("food"), 50)
 	assert_eq(sim.store.get_resource("wood"), 25)
 	assert_eq(sim.store.get_resource("security"), 50)
 	assert_eq(sim.store.get_resource("morale"), 60)

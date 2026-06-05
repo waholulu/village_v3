@@ -6,8 +6,8 @@ param(
 	[double]$MaxNegativeClaimRate = 0.05,
 	[int]$MaxDailyCancellationBurst = 40,
 	[int]$SweepStartSeed = 4312,
-	[int]$SweepSeedCount = 10,
-	[int]$RequiredSweepWins = 7,
+	[int]$SweepSeedCount = 20,
+	[int]$RequiredSweepWins = 14,
 	[double]$MinWinningAverageDeathRate = 0.20,
 	[double]$MaxWinningAverageDeathRate = 0.40,
 	[switch]$Strict
@@ -57,6 +57,72 @@ function Get-EventGroups {
 	return $groups
 }
 
+function Get-ExpectedEventIds {
+	param([string]$RepoRoot)
+	$eventsPath = Join-Path $RepoRoot "data\events.json"
+	if (-not (Test-Path -LiteralPath $eventsPath)) {
+		return @()
+	}
+	$data = Get-Content -LiteralPath $eventsPath -Raw | ConvertFrom-Json
+	$events = @()
+	if ($data.PSObject.Properties.Name -contains "events") {
+		$events = @($data.events)
+	} else {
+		$events = @($data)
+	}
+	return @($events | ForEach-Object { [string]$_.id } | Where-Object { $_ -ne "" } | Sort-Object -Unique)
+}
+
+function Get-DrawnEventIds {
+	param($Runs)
+	return @(
+		$Runs |
+			ForEach-Object { $_.events } |
+			Where-Object { $_.event -eq "event_drawn" -and $null -ne $_.event_id -and [string]$_.event_id -ne "" } |
+			ForEach-Object { [string]$_.event_id } |
+			Sort-Object -Unique
+	)
+}
+
+function Get-NegativeSnapshotFindings {
+	param($Runs)
+	$fields = @(
+		"population",
+		"strategic_food",
+		"security",
+		"morale",
+		"zero_food_days",
+		"zero_morale_days",
+		"zero_security_days",
+		"wood",
+		"fresh_food",
+		"stored_food",
+		"campfire_out"
+	)
+	$findings = @()
+	foreach ($run in $Runs) {
+		foreach ($snapshot in @($run.snapshots)) {
+			foreach ($field in $fields) {
+				$property = $snapshot.PSObject.Properties[$field]
+				if ($null -eq $property) {
+					continue
+				}
+				$value = [int]$property.Value
+				if ($value -lt 0) {
+					$findings += [pscustomobject]@{
+						seed = if ($run.seed -gt 0) { $run.seed } else { "primary" }
+						day = $snapshot.day
+						label = $snapshot.label
+						field = $field
+						value = $value
+					}
+				}
+			}
+		}
+	}
+	return $findings
+}
+
 function Invoke-HeadlessRun {
 	param(
 		[string]$RepoRoot,
@@ -101,7 +167,7 @@ function Invoke-HeadlessRun {
 
 	$snapshots = @()
 	foreach ($line in $output) {
-		if ($line -match "^(START|DAY_STARTED|NIGHT_RESOLVED|FINAL) \| day=(\d+).*strategic\(pop=(\d+) food=(\d+) security=(\d+) morale=(\d+) zero=(\d+)\/(\d+)\/(\d+)\).*legacy\(wood=(\d+) food=(\d+)\+(\d+) visible=(\d+)\/(\d+) dead=(\d+) hungry=(\d+) campfire_out=(\d+)\).*tasks\(open=(\d+) claimed=(\d+) done=(\d+) cancelled=(\d+)\) anomalies=(\d+)") {
+		if ($line -match "^(START|DAY_STARTED|NIGHT_RESOLVED|FINAL) \| day=(-?\d+).*strategic\(pop=(-?\d+) food=(-?\d+) security=(-?\d+) morale=(-?\d+) zero=(-?\d+)\/(-?\d+)\/(-?\d+)\).*legacy\(wood=(-?\d+) food=(-?\d+)\+(-?\d+) visible=(-?\d+)\/(-?\d+) dead=(-?\d+) hungry=(-?\d+) campfire_out=(-?\d+)\).*tasks\(open=(-?\d+) claimed=(-?\d+) done=(-?\d+) cancelled=(-?\d+)\) anomalies=(-?\d+)") {
 			$snapshots += [pscustomobject]@{
 				label = $Matches[1]
 				day = [int]$Matches[2]
@@ -206,6 +272,7 @@ $gates = [ordered]@{
 $seedSweep = @()
 $winningAverageDeathRate = $null
 $sweepWins = $null
+$sweepLosses = $null
 if ($Preset -eq "default") {
 	for ($offset = 0; $offset -lt $SweepSeedCount; $offset++) {
 		$seed = $SweepStartSeed + $offset
@@ -216,12 +283,24 @@ if ($Preset -eq "default") {
 	if ($winningSweepRuns.Count -gt 0) {
 		$winningAverageDeathRate = [math]::Round((($winningSweepRuns | Measure-Object -Property death_rate -Average).Average), 4)
 	}
+	$sweepLosses = @($seedSweep | Where-Object { -not $_.result.StartsWith("WIN") }).Count
 	$gates["sweep_win_count_ok"] = ($sweepWins -ge $RequiredSweepWins)
 	$gates["winning_average_death_rate_ok"] = (
 		$null -ne $winningAverageDeathRate `
 		-and $winningAverageDeathRate -ge $MinWinningAverageDeathRate `
 		-and $winningAverageDeathRate -le $MaxWinningAverageDeathRate
 	)
+	$gates["sweep_has_win_and_loss_ok"] = ($sweepWins -gt 0 -and $sweepLosses -gt 0)
+}
+
+$allRuns = @($primaryRun) + @($seedSweep)
+$expectedEventIds = Get-ExpectedEventIds -RepoRoot $repoRoot
+$drawnEventIds = Get-DrawnEventIds -Runs $allRuns
+$missingEventIds = @($expectedEventIds | Where-Object { $_ -notin $drawnEventIds })
+$negativeSnapshotFindings = @(Get-NegativeSnapshotFindings -Runs $allRuns)
+$gates["negative_resources_and_streaks_ok"] = ($negativeSnapshotFindings.Count -eq 0)
+if ($Preset -eq "default") {
+	$gates["event_card_coverage_ok"] = ($expectedEventIds.Count -eq 25 -and $missingEventIds.Count -eq 0)
 }
 
 $report = [ordered]@{
@@ -248,6 +327,17 @@ $report = [ordered]@{
 	morale_unique = $moraleValues
 	population_mismatch = $populationMismatch
 	death_rate = $primaryRun.death_rate
+	event_cards = [ordered]@{
+		expected_count = $expectedEventIds.Count
+		drawn_count = $drawnEventIds.Count
+		drawn_ids = $drawnEventIds
+		missing_ids = $missingEventIds
+		coverage_ok = ($expectedEventIds.Count -eq 25 -and $missingEventIds.Count -eq 0)
+	}
+	negative_resources_and_streaks = [ordered]@{
+		count = $negativeSnapshotFindings.Count
+		findings = @($negativeSnapshotFindings)
+	}
 	task_claims = [ordered]@{
 		total = $primaryRun.task_claims.Count
 		negative = $primaryRun.negative_claims.Count
@@ -277,9 +367,11 @@ $report = [ordered]@{
 			seed_start = $SweepStartSeed
 			seed_count = $SweepSeedCount
 			wins = $sweepWins
+			losses = $sweepLosses
 			required_wins = $RequiredSweepWins
 			winning_average_death_rate = $winningAverageDeathRate
 			target_range = @($MinWinningAverageDeathRate, $MaxWinningAverageDeathRate)
+			result_counts = Get-EventGroups $seedSweep "result"
 		}
 	} else { $null }
 	gates = $gates
@@ -302,8 +394,10 @@ if ($finalSnapshot) {
 }
 Write-Host ("  task claims: total={0} negative={1} rate={2}" -f $primaryRun.task_claims.Count, $primaryRun.negative_claims.Count, $primaryRun.negative_claim_rate)
 Write-Host ("  cancellations: total={0} max_daily_burst={1}" -f $primaryRun.task_cancellations.Count, $primaryRun.max_daily_cancellation_burst)
+Write-Host ("  negative resources/streaks: {0}" -f $negativeSnapshotFindings.Count)
 if ($Preset -eq "default") {
-	Write-Host ("  sweep: wins={0}/{1} avg_death_rate={2}" -f $sweepWins, $SweepSeedCount, $winningAverageDeathRate)
+	Write-Host ("  sweep: wins={0}/{1} losses={2} avg_death_rate={3}" -f $sweepWins, $SweepSeedCount, $sweepLosses, $winningAverageDeathRate)
+	Write-Host ("  event cards: drawn={0}/{1} missing={2}" -f $drawnEventIds.Count, $expectedEventIds.Count, $missingEventIds.Count)
 }
 Write-Host "  gates:"
 foreach ($key in $gates.Keys) {

@@ -34,11 +34,16 @@ func test_default_preset_unchanged() -> void:
 	assert_eq(balance.starting_population, 5)
 	assert_eq(balance.villager_count, 5)
 	assert_eq(balance.starting_population_capacity, 5)
-	assert_eq(balance.starting_food, 40)
+	assert_eq(balance.starting_food, 50)
 	assert_eq(balance.starting_security, 50)
 	assert_eq(balance.starting_morale, 60)
 	assert_eq(balance.days_per_season, 15)
+	assert_eq(balance.hunter_injury_chance_percent, 25)
 	assert_eq(balance.wood_per_tree, 4)
+	assert_eq(balance.max_campfire_out_nights, 5)
+	assert_eq(balance.policy_food_task_target, 60)
+	assert_eq(balance.food_per_bush, 3)
+	assert_eq(balance.food_per_deer, 3)
 	assert_eq(balance.wolf_threat_radius, 10)
 
 func test_hard_preset_triggers_wolf_threat_on_night_1() -> void:
