@@ -23,6 +23,25 @@ func test_initial_strategic_state_matches_mvp_defaults() -> void:
 	assert_eq(sim.get_visible_population(), 5)
 	assert_false(sim.has_population_mismatch())
 
+func test_snapshot_includes_construction_counts_and_active_project() -> void:
+	var balance := BalanceData.new()
+	var sim := _setup_world_sim(balance)
+	sim.world_gen.set_tile(0, 0, WorldGenerator.TileType.HOUSE)
+	sim._fence_count = 2
+	sim._watchtower_count = 1
+	sim._storage_count = 1
+	sim.board.create_task("build_storage", Vector2i(1, 1), 0)
+	var construction: Dictionary = sim.get_snapshot()["construction"]
+	var counts: Dictionary = construction["counts"]
+	var active_project: Dictionary = construction["active_project"]
+	assert_eq(counts["houses"], 1)
+	assert_eq(counts["fences"], 2)
+	assert_eq(counts["watchtowers"], 1)
+	assert_eq(counts["storage"], 1)
+	assert_true(construction["has_active_project"])
+	assert_eq(active_project["type"], "storage")
+	assert_eq(active_project["label"], "Storage")
+
 func test_season_ranges_are_15_days_each() -> void:
 	var gt: GameTime = add_child_autoqfree(GameTime.new())
 	gt.setup(10.0, 5.0, 15)

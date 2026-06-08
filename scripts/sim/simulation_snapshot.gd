@@ -58,12 +58,59 @@ static func build(sim: VillageSimulation) -> Dictionary:
 			"morale": sim.zero_morale_days,
 			"security": sim.zero_security_days,
 		},
+		"zero_resource_loss_days": sim._balance.zero_resource_loss_days,
+		"max_campfire_out_nights": sim._balance.max_campfire_out_nights,
 		"pending_event": pending_event,
 		"active_event_effects": sim.active_event_effects.duplicate(true),
 		"last_event_result": sim.last_event_result.duplicate(true),
 		"last_event_day": sim.last_event_day,
+		"construction": _construction_snapshot(sim),
 		"tasks": tasks,
 		"nature": sim.get_nature_summary(),
 		"risk": risk,
 		"ai_status": "Attention" if risk.food_shortfall > 0 or risk.wood_shortfall > 0 or risk.monitor_anomalies > 0 else "Stable",
 	}
+
+static func _construction_snapshot(sim: VillageSimulation) -> Dictionary:
+	var counts := {
+		"houses": 0,
+		"fences": sim._fence_count,
+		"watchtowers": sim._watchtower_count,
+		"storage": sim._storage_count,
+	}
+	if sim.world_gen != null:
+		counts["houses"] = sim.world_gen.count_tiles_of_type(WorldGenerator.TileType.HOUSE)
+	var active_project := {}
+	if sim.board != null:
+		for task in sim.board._tasks:
+			if task.status != Task.Status.OPEN and task.status != Task.Status.CLAIMED:
+				continue
+			if not String(task.type).begins_with("build_"):
+				continue
+			var key: String = String(task.type).replace("build_", "")
+			active_project = {
+				"type": key,
+				"label": _building_label(key),
+				"task_type": task.type,
+				"status": Task.Status.keys()[task.status].to_lower(),
+				"x": task.target_tile.x,
+				"y": task.target_tile.y,
+			}
+			break
+	return {
+		"counts": counts,
+		"active_project": active_project,
+		"has_active_project": not active_project.is_empty(),
+	}
+
+static func _building_label(key: String) -> String:
+	match key:
+		"house":
+			return "House"
+		"fence":
+			return "Fence"
+		"watchtower":
+			return "Watchtower"
+		"storage":
+			return "Storage"
+	return key.capitalize()

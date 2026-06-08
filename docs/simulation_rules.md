@@ -303,14 +303,14 @@ Four buildings, data-driven via `BuildingDefs.BUILDINGS`:
 | House | 8 wood | 1 | `population_growth_enabled` AND villagers >= capacity | `population_capacity += population_capacity_per_house` |
 | Watchtower | 6 wood | 2 | `day >= 4` AND not yet built | Halves wolf damage before fence mitigation |
 | Fence | 2 wood | 3 | wolves present AND `_wolf_threat_count > 0` AND `_fence_count < 8` | Each fence multiplies remaining wolf damage by `1 - fence_wolf_damage_reduction` |
-| Storage | 4 wood | 4 | `fresh_food >= food_surplus_threshold` | Increases food spoilage cap by `food_capacity_per_storage` |
+| Storage | 4 wood | 4 | `fresh_food >= food_surplus_threshold` | Reduces nightly fresh-food spoilage by 1 per storage, down to 0 |
 
 - One building planned per day_start (`ConstructionPlanner.plan` returns
   one decision at most). Wood budget is checked first; building is skipped
   if unaffordable.
-- `_apply_food_spoilage` runs at night: food above
-  `food_base_capacity + storage_count * food_capacity_per_storage` spoils
-  by `(excess) / food_spoilage_divisor` per night (rounded up).
+- `_apply_food_spoilage` runs at night: actual spoilage is
+  `max(0, fresh_food_spoilage_per_night - storage_count)`. Only `fresh_food`
+  spoils; `stored_food` is unchanged.
 
 ## Night resolution
 
@@ -325,7 +325,7 @@ In `_on_night_started`:
    If shortfall, `campfire_out_nights += 1`. If `campfire_out_nights >=
    max_campfire_out_nights` (default preset: 5), emit `game_lost("Campfire out for N
    consecutive nights")`.
-3. `_apply_food_spoilage` against storage capacity.
+3. `_apply_food_spoilage` against storage-adjusted flat spoilage.
 4. `nature.check_wolf_threat` → if true, `_apply_wolf_disruption`
    (which re-checks starvation after damage and may kill one villager).
 
@@ -448,6 +448,14 @@ repeatable tuning loop.
 - DebugOverlay shows the run seed, pending event title/category, each active
   event effect with type and remaining days, and the last resolved event
   option.
+- `SimulationSnapshot` includes a `construction` dictionary with building
+  counts plus the current active `build_*` task, if any.
+- HUD shows a compact construction line (`Builds H/F/T/S`) or the current
+  automatic project.
+- HUD shows a right-side alert stack for critical population, zero resource
+  streaks, campfire-out streaks, next-night food/wood shortfalls, monitor
+  anomalies, villager deaths, and wolf threats. Alerts are observation-only
+  and do not change simulation state.
 - Both HUD and DebugOverlay are pure signal-driven — no per-frame polling of
   simulation state by UI scripts. The HUD clock refreshes from `GameTime`'s
   clock signal.

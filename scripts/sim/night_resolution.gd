@@ -63,7 +63,7 @@ static func _resolve_campfire(sim) -> void:
 # exposing the test surface to changes here.
 static func apply_food_spoilage(sim) -> void:
 	var balance: BalanceData = sim._balance
-	var spoil: int = balance.fresh_food_spoilage_per_night
+	var spoil: int = maxi(0, balance.fresh_food_spoilage_per_night - sim._storage_count)
 	if spoil <= 0:
 		return
 	var before: int = sim.store.get_resource("fresh_food")

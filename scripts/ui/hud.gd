@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 const PixelThemeScript = preload("res://scripts/ui/pixel_theme.gd")
+const AlertRulesScript = preload("res://scripts/ui/alert_rules.gd")
 const MAX_LOG_LINES := 6
 
 @onready var _panel: Panel = $Panel
@@ -18,9 +19,12 @@ const MAX_LOG_LINES := 6
 @onready var _lbl_policy: Label = $Panel/BottomRow/LblPolicy
 @onready var _lbl_effects: Label = $Panel/BottomRow/LblEffects
 @onready var _lbl_tasks: Label = $Panel/BottomRow/LblTasks
+@onready var _lbl_construction: Label = $Panel/BottomRow/LblConstruction
 @onready var _lbl_nature: Label = $Panel/BottomRow/LblNature
 @onready var _lbl_ai: Label = $Panel/BottomRow/LblAI
 @onready var _lbl_status: Label = $Panel/BottomRow/LblStatus
+@onready var _alert_panel: Panel = $AlertPanel
+@onready var _lbl_alerts: Label = $AlertPanel/LblAlerts
 @onready var _inspector_panel: Panel = $InspectorPanel
 @onready var _lbl_tile_title: Label = $InspectorPanel/LblTileTitle
 @onready var _lbl_tile_body: Label = $InspectorPanel/LblTileBody
@@ -37,6 +41,7 @@ var _saved_speed := 1.0
 var _is_blocking := false
 var _blocking_enabled := false
 var _log_lines: Array[String] = []
+var _activity_alerts: Array[Dictionary] = []
 
 func _ready() -> void:
 	_apply_theme()
@@ -93,6 +98,8 @@ func _apply_theme() -> void:
 	$PolicyPanel/Title.add_theme_color_override("font_color", PixelThemeScript.FIRE)
 	$EventPanel/LblEventTitle.add_theme_color_override("font_color", PixelThemeScript.FIRE)
 	$ResultPanel/LblResultTitle.add_theme_color_override("font_color", PixelThemeScript.FIRE)
+	$AlertPanel/LblAlertTitle.add_theme_color_override("font_color", PixelThemeScript.DANGER)
+	$AlertPanel/LblAlerts.add_theme_color_override("font_color", PixelThemeScript.INK)
 
 func _layout_for_viewport() -> void:
 	var size := get_viewport().get_visible_rect().size
@@ -102,7 +109,12 @@ func _layout_for_viewport() -> void:
 	$Panel/BottomRow.size.x = _panel.size.x - 24.0
 	$ModalDim.position = Vector2.ZERO
 	$ModalDim.size = size
-	_inspector_panel.position = Vector2(maxf(8.0, size.x - 410.0), 116)
+	_alert_panel.size = Vector2(402, 142)
+	_alert_panel.position = Vector2(maxf(8.0, size.x - _alert_panel.size.x - 8.0), 116)
+	var inspector_y := 116.0
+	if _alert_panel.visible:
+		inspector_y = _alert_panel.position.y + _alert_panel.size.y + 8.0
+	_inspector_panel.position = Vector2(maxf(8.0, size.x - 410.0), inspector_y)
 	_log_panel.position = Vector2(8, maxf(330.0, size.y - 250.0))
 	for modal in [_policy_panel, _event_panel, _result_panel]:
 		modal.position = (size - modal.size) * 0.5
@@ -119,8 +131,10 @@ func _refresh_all() -> void:
 	_refresh_policy_label()
 	_refresh_effects_label()
 	_refresh_tasks_label()
+	_refresh_construction_label()
 	_on_wildlife_changed(_sim.nature.get_animals_as_dicts() if _sim.nature else [])
 	_on_monitor_anomalies_changed(_sim.monitor_anomalies)
+	_refresh_alerts()
 	clear_tile_inspector()
 
 func _on_stock_changed(resource_name: String, amount: int) -> void:
@@ -130,14 +144,17 @@ func _on_stock_changed(resource_name: String, amount: int) -> void:
 		"population": _refresh_population_label()
 		"security": _lbl_hungry.text = "SECURITY %d" % amount
 		"morale": _lbl_campfire.text = "MORALE %d" % amount
+	_refresh_alerts()
 
 func _on_day_started(_day: int) -> void:
 	_refresh_time_label()
 	_refresh_effects_label()
+	_refresh_alerts()
 	call_deferred("_sync_blocking_state")
 
 func _on_night_started(_day: int) -> void:
 	_refresh_time_label()
+	_refresh_alerts()
 
 func _on_clock_changed(_day: int, _phase: GameTime.Phase, _minute_of_day: int) -> void:
 	_refresh_time_label()
@@ -151,6 +168,8 @@ func _on_night_started_refresh(_day: int) -> void:
 
 func _on_population_changed(_current: int, _capacity: int) -> void:
 	_refresh_population_label()
+	_refresh_construction_label()
+	_refresh_alerts()
 
 func _on_hunger_changed(_hungry_count: int) -> void:
 	if _sim != null:
@@ -166,6 +185,7 @@ func _on_wildlife_changed(_animals: Array) -> void:
 func _on_monitor_anomalies_changed(anomalies: Array[Dictionary]) -> void:
 	_lbl_status.text = "!" if not anomalies.is_empty() else ""
 	_lbl_status.add_theme_color_override("font_color", PixelThemeScript.DANGER)
+	_refresh_alerts()
 
 func _refresh_tasks_label() -> void:
 	if _sim != null:
@@ -173,6 +193,22 @@ func _refresh_tasks_label() -> void:
 			_sim.board.count_by_status(Task.Status.OPEN),
 			_sim.board.count_by_status(Task.Status.CLAIMED),
 		]
+
+func _refresh_construction_label() -> void:
+	if _sim == null:
+		return
+	var construction: Dictionary = _sim.get_snapshot().get("construction", {})
+	var counts: Dictionary = construction.get("counts", {})
+	var active_project: Dictionary = construction.get("active_project", {})
+	if not active_project.is_empty():
+		_lbl_construction.text = "Project: %s" % active_project.get("label", "Build")
+		return
+	_lbl_construction.text = "Builds H%d F%d T%d S%d" % [
+		counts.get("houses", 0),
+		counts.get("fences", 0),
+		counts.get("watchtowers", 0),
+		counts.get("storage", 0),
+	]
 
 func _refresh_policy_label() -> void:
 	if _sim != null:
@@ -186,6 +222,43 @@ func _refresh_effects_label() -> void:
 	for effect in _sim.active_event_effects:
 		parts.append("%s (%dd)" % [effect.get("label", effect.get("type", "effect")), effect.get("remaining_days", 0)])
 	_lbl_effects.text = "Effects: " + ", ".join(parts)
+
+func _refresh_alerts() -> void:
+	if _sim == null:
+		_alert_panel.visible = false
+		_lbl_alerts.text = ""
+		return
+	_prune_activity_alerts()
+	var alerts: Array[Dictionary] = AlertRulesScript.build(_sim.get_snapshot(), _sim.monitor_anomalies, _activity_alerts)
+	_alert_panel.visible = not alerts.is_empty()
+	if alerts.is_empty():
+		_lbl_alerts.text = ""
+	else:
+		var lines: Array[String] = []
+		for alert in alerts:
+			lines.append(_format_alert_line(alert))
+		_lbl_alerts.text = "\n".join(lines)
+	_layout_for_viewport()
+
+func _prune_activity_alerts() -> void:
+	if _sim == null or _sim.game_time == null:
+		return
+	var current_day := _sim.game_time.day
+	var kept: Array[Dictionary] = []
+	for alert in _activity_alerts:
+		if int(alert.get("day", current_day)) >= current_day - 1:
+			kept.append(alert)
+	_activity_alerts = kept
+
+func _format_alert_line(alert: Dictionary) -> String:
+	var marker := "!"
+	if String(alert.get("severity", "warning")) == "critical":
+		marker = "!!"
+	return "%s %s - %s" % [
+		marker,
+		alert.get("title", "Alert"),
+		alert.get("message", ""),
+	]
 
 func _set_speed(speed: float) -> void:
 	if _is_blocking:
@@ -302,19 +375,29 @@ func _on_daily_summary(summary: Dictionary) -> void:
 		summary.get("day", 0), summary.get("food", 0), summary.get("wood", 0),
 		summary.get("security", 0), summary.get("morale", 0),
 	])
+	_refresh_alerts()
 
 func _on_activity_logged(entry: Dictionary) -> void:
 	match String(entry.get("event", "")):
+		"construction_planned":
+			_add_log("%s planned." % String(entry.get("building", "building")).capitalize())
+			_refresh_tasks_label()
+			_refresh_construction_label()
 		"villager_born":
 			_add_log("%s joined the village." % entry.get("name", "A villager"))
 		"villager_died":
 			_add_log("%s died: %s." % [entry.get("villager", "A villager"), entry.get("reason", "unknown cause")])
+			_add_activity_alert("death_%s" % entry.get("id", _activity_alerts.size()), "critical", "Villager died", String(entry.get("villager", "A villager")))
 		"built":
 			_add_log("%s completed a %s." % [entry.get("villager", "A villager"), entry.get("building", "building")])
+			_refresh_tasks_label()
+			_refresh_construction_label()
 		"campfire_out":
 			_add_log("The campfire went out.")
 		"wolf_threat":
 			_add_log("Wolves threatened the village.")
+			_add_activity_alert("wolf_threat_%d" % _activity_alerts.size(), "critical", "Wolf threat", String(entry.get("disrupted_villager", "A villager")))
+	_refresh_alerts()
 
 func _add_log(text: String) -> void:
 	if text.is_empty():
@@ -323,6 +406,18 @@ func _add_log(text: String) -> void:
 	if _log_lines.size() > MAX_LOG_LINES:
 		_log_lines.resize(MAX_LOG_LINES)
 	_lbl_log.text = "\n".join(_log_lines)
+
+func _add_activity_alert(id: String, severity: String, title: String, message: String) -> void:
+	var day := _sim.game_time.day if _sim != null and _sim.game_time != null else 0
+	_activity_alerts.push_front({
+		"id": id,
+		"severity": severity,
+		"title": title,
+		"message": message,
+		"day": day,
+	})
+	if _activity_alerts.size() > AlertRulesScript.MAX_ALERTS:
+		_activity_alerts.resize(AlertRulesScript.MAX_ALERTS)
 
 func _on_game_won() -> void:
 	_show_end_state("THE VILLAGE SURVIVES", "You kept the campfire burning through day 60.")
@@ -359,7 +454,7 @@ func clear_tile_inspector() -> void:
 	_lbl_tile_body.text = "Click a tile to inspect it."
 
 func is_screen_point_over_ui(screen_pos: Vector2) -> bool:
-	for control in [_panel, _inspector_panel, _log_panel, _policy_panel, _event_panel, _result_panel]:
+	for control in [_panel, _alert_panel, _inspector_panel, _log_panel, _policy_panel, _event_panel, _result_panel]:
 		if control.visible and control.get_global_rect().has_point(screen_pos):
 			return true
 	return _modal_dim.visible

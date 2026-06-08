@@ -102,6 +102,11 @@ custom_minimum_size = Vector2(190, 0)
 layout_mode = 2
 text = "Tasks: 0 / 0"
 
+[node name="LblConstruction" type="Label" parent="Panel/BottomRow"]
+custom_minimum_size = Vector2(176, 0)
+layout_mode = 2
+text = "Builds H0 F0 T0 S0"
+
 [node name="LblNature" type="Label" parent="Panel/BottomRow"]
 visible = false
 layout_mode = 2
@@ -112,6 +117,28 @@ layout_mode = 2
 
 [node name="LblStatus" type="Label" parent="Panel/BottomRow"]
 layout_mode = 2
+
+[node name="AlertPanel" type="Panel" parent="."]
+offset_left = 1030.0
+offset_top = 116.0
+offset_right = 1432.0
+offset_bottom = 258.0
+visible = false
+
+[node name="LblAlertTitle" type="Label" parent="AlertPanel"]
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 390.0
+offset_bottom = 34.0
+text = "ALERTS"
+
+[node name="LblAlerts" type="Label" parent="AlertPanel"]
+offset_left = 12.0
+offset_top = 40.0
+offset_right = 390.0
+offset_bottom = 128.0
+text = ""
+autowrap_mode = 2
 
 [node name="InspectorPanel" type="Panel" parent="."]
 offset_left = 1030.0

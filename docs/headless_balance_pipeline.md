@@ -62,6 +62,8 @@ Prefer one small change per loop:
   `policy_wood_task_target`, task scoring thresholds.
 - Threat pressure: wolf spawn/radius/disruption values, winter wood demand, and
   `max_campfire_out_nights`.
+- Storage pressure: storage buildings use the existing
+  `fresh_food_spoilage_per_night` lever; no separate storage tuning key exists.
 
 After a rule change, update `docs/simulation_rules.md` and add or update a GUT
 test for the rule.

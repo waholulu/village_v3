@@ -52,8 +52,24 @@ func test_watchtower_and_fences_stack() -> void:
 	assert_eq(after - before, 4)
 
 func test_fresh_food_spoils_by_flat_amount_per_night() -> void:
-	# fresh_food_spoilage_per_night=1 (default); flat spoilage regardless of stock
+	# fresh_food_spoilage_per_night=1 (default); no storage keeps the flat spoilage path.
 	sim.store.add_resource("fresh_food", 10)  # 8 starting + 10 = 18
 	sim._apply_food_spoilage()
 	assert_eq(sim.store.get_resource("fresh_food"), 17)  # 18 - 1 = 17
 	assert_eq(sim.store.get_resource("stored_food"), 0)  # stored unchanged
+
+func test_storage_reduces_fresh_food_spoilage() -> void:
+	sim._balance.fresh_food_spoilage_per_night = 3
+	sim._storage_count = 1
+	sim.store.add_resource("fresh_food", 10)  # 8 starting + 10 = 18
+	sim.store.add_resource("stored_food", 5)
+	sim._apply_food_spoilage()
+	assert_eq(sim.store.get_resource("fresh_food"), 16)  # 18 - max(0, 3 - 1)
+	assert_eq(sim.store.get_resource("stored_food"), 5)
+
+func test_multiple_storage_never_makes_spoilage_negative() -> void:
+	sim._balance.fresh_food_spoilage_per_night = 2
+	sim._storage_count = 3
+	sim.store.add_resource("fresh_food", 10)  # 8 starting + 10 = 18
+	sim._apply_food_spoilage()
+	assert_eq(sim.store.get_resource("fresh_food"), 18)
